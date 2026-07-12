@@ -1,0 +1,1074 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>透视图的基本画法</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+      color: #111;
+      font-family: Arial, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    }
+    .page-title {
+      position: fixed;
+      left: 18px;
+      top: 14px;
+      z-index: 5;
+      font-size: 22px;
+      font-weight: 600;
+      pointer-events: none;
+    }
+    .panel {
+      position: fixed;
+      right: 16px;
+      top: 14px;
+      z-index: 5;
+      display: grid;
+      gap: 8px;
+      width: 168px;
+    }
+    .button-group { display: grid; gap: 0; }
+    .button-group button + button { margin-top: -1px; }
+    .button-group button { border-radius: 0; }
+    .button-group button:first-child { border-radius: 6px 6px 0 0; }
+    .button-group button:last-child { border-radius: 0 0 6px 6px; }
+    .panel button {
+      height: 32px;
+      border: 1px solid #b8b8b8;
+      background: rgba(255, 255, 255, 0.94);
+      color: #111;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: Arial, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    }
+    .panel button.active {
+      border-color: #0b57ff;
+      color: #0b57ff;
+      font-weight: 600;
+    }
+    .note {
+      padding: 8px 10px;
+      border: 1px solid #b8b8b8;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.94);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .wrap {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    svg {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+    }
+    text {
+      font-family: Arial, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      font-size: 18px;
+      fill: #000;
+      dominant-baseline: middle;
+      font-weight: 400;
+    }
+    .zh { font-size: 18px; font-weight: 600; }
+    .angle-label { font-size: 14px; }
+    .axis { stroke: #000; stroke-width: 2; fill: none; }
+    .front-border { stroke: #f00; stroke-width: 2; fill: none; }
+    .top-border { stroke: #24964a; stroke-width: 2; fill: none; }
+    .side-border { stroke: #d6a600; stroke-width: 2; fill: none; }
+    .object { stroke: #000; stroke-width: 3.2; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+    .thin { stroke: #000; stroke-width: 2; fill: none; }
+    .blue { stroke: #001dff; stroke-width: 0.85; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .guide { stroke: #001dff; stroke-width: 0.85; fill: none; stroke-linecap: round; }
+    line, path { marker-start: none !important; marker-mid: none !important; marker-end: none !important; }
+    .dash { stroke-dasharray: none; }
+    .blue.dash, .guide.dash, .blue.light-blue-line, .guide.light-blue-line { stroke: #72a8ff; stroke-width: 0.85; }
+    .projection-line, .thin.projection-line, .blue.projection-line, .blue.dash.projection-line, .guide.projection-line, .guide.dash.projection-line { stroke: #a8d9a0; stroke-width: 0.85; }
+    .guide.s-vanish-line { stroke: #9b6bd3; stroke-width: 0.85; }
+    .guide.vanish-line, .guide.vanish-line.dash, .guide.vanish-line.light-blue-line { stroke: #f3a6c5; stroke-width: 0.85; }
+    .dot-dash { stroke-dasharray: none; stroke-linecap: round; }
+    .hidden-edge { stroke: #777; stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: none; }
+    .front-face { display: none; }
+    .ground-fill { fill: #ead6bd; }
+    .sky-fill { fill: #dff1ff; }
+    .cloud { fill: #fff; stroke: none; opacity: 0.88; }
+    .point { fill: #fff; stroke: #f00; stroke-width: 2; }
+    .top-point { stroke: #24964a; }
+    .front-point { stroke: #f00; }
+    .side-point { stroke: #d6a600; }
+    .drag { cursor: grab; }
+    .drag:active { cursor: grabbing; }
+    .step-el { transition: opacity 120ms ease; }
+    .hidden { opacity: 0; pointer-events: none; }
+    svg.labels-hidden text { opacity: 0; pointer-events: none; }
+    svg.labels-hidden circle.point { opacity: 0; }
+    svg.aux-hidden .aux { opacity: 0; pointer-events: none; }
+    svg.examples-hidden .real-example { opacity: 0; pointer-events: none; }
+    .real-example {
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+    .real-body {
+      stroke: #333;
+      stroke-width: 1.25;
+      fill: #ffd4df;
+      fill-opacity: 1;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    .real-limb {
+      stroke: #333;
+      stroke-width: 1.25;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .real-eye { fill: #111; stroke: none; }
+  </style>
+</head>
+<body>
+  <div class="page-title">透视图的基本画法</div>
+  <div class="panel">
+    <div class="button-group">
+      <button data-step-button="1">1 布局</button>
+      <button data-step-button="2">2 视点与视角</button>
+      <button data-step-button="3">3 灭点 Fx/Fy</button>
+      <button data-step-button="4">4 底面透视</button>
+      <button data-step-button="5" class="active">5 真高成体</button>
+    </div>
+    <div class="button-group">
+      <button id="labelToggleBtn">隐藏标注</button>
+      <button id="auxToggleBtn">隐藏辅助线</button>
+      <button id="exampleToggleBtn">显示实物示例</button>
+      <button id="resetBtn">归位</button>
+    </div>
+    <div id="note" class="note"></div>
+  </div>
+
+  <div class="wrap">
+    <svg id="svg" viewBox="0 0 920 590" aria-label="透视图的基本画法">
+      <g id="measuredProjection" class="step-el" data-step="1">
+        <rect class="step-el real-example sky-fill" data-step="2" x="7" y="219" width="268" height="336"></rect>
+        <rect class="step-el real-example ground-fill" data-step="2" x="7" y="555" width="268" height="24"></rect>
+        <g id="sideCloudLayer" class="step-el real-example" data-step="2">
+          <g class="cloud" transform="translate(55 278) scale(0.72)">
+            <ellipse cx="0" cy="10" rx="22" ry="9"></ellipse>
+            <ellipse cx="18" cy="6" rx="18" ry="12"></ellipse>
+            <ellipse cx="39" cy="10" rx="25" ry="9"></ellipse>
+          </g>
+          <g class="cloud" transform="translate(156 316) scale(0.64)">
+            <ellipse cx="0" cy="9" rx="18" ry="8"></ellipse>
+            <ellipse cx="16" cy="5" rx="15" ry="11"></ellipse>
+            <ellipse cx="34" cy="9" rx="21" ry="8"></ellipse>
+          </g>
+          <g class="cloud" transform="translate(202 258) scale(0.58)">
+            <ellipse cx="0" cy="10" rx="20" ry="8"></ellipse>
+            <ellipse cx="18" cy="5" rx="17" ry="12"></ellipse>
+            <ellipse cx="38" cy="10" rx="24" ry="8"></ellipse>
+          </g>
+        </g>
+        <rect class="side-border" x="6" y="218" width="270" height="362"></rect>
+        <line class="axis" x1="35" y1="555" x2="255" y2="555"></line>
+        <rect id="measureRect" class="object drag" x="76" y="430" width="56" height="125"></rect>
+        <line id="measureDim" class="thin" x1="166" y1="430" x2="166" y2="555"></line>
+        <line id="measureTickTop" class="thin" x1="158" y1="430" x2="174" y2="430"></line>
+        <line class="thin" x1="158" y1="555" x2="174" y2="555"></line>
+        <circle id="measureHandle" class="point side-point drag" cx="132" cy="430" r="4"></circle>
+      </g>
+      <line id="measureTopToA0" class="step-el thin projection-line" data-step="5"></line>
+
+      <g id="mainDiagram" transform="translate(270 0)">
+        <rect class="step-el real-example ground-fill" data-step="2" x="7" y="7" width="616" height="211"></rect>
+        <rect id="frontSkyFill" class="step-el real-example sky-fill" data-step="2" x="7" y="219" width="616" height="276"></rect>
+        <rect id="frontGroundFill" class="step-el real-example ground-fill" data-step="2" x="7" y="495" width="616" height="84"></rect>
+        <rect class="top-border" x="6" y="6" width="618" height="212"></rect>
+        <rect class="front-border" x="6" y="218" width="618" height="362"></rect>
+        <g id="lightBlueBackLayer" class="aux"></g>
+
+        <g class="step-el" data-step="1">
+          <line id="topOX" class="axis" x1="42" y1="165" x2="582" y2="165"></line>
+          <line class="axis" x1="42" y1="555" x2="582" y2="555"></line>
+          <line id="frontHLine" class="axis" x1="42" y1="495" x2="582" y2="495"></line>
+          <path id="planShape" class="object"></path>
+          <line id="planAB" class="object"></line>
+          <circle id="ptA" class="point top-point drag" r="4"></circle>
+          <circle id="ptB" class="point top-point" r="3"></circle>
+          <circle id="ptC" class="point top-point" r="3"></circle>
+          <circle id="ptD" class="point top-point drag" r="4"></circle>
+          <circle id="ptCx" class="point top-point" r="3"></circle>
+          <circle id="ptBx" class="point top-point" r="3"></circle>
+          <circle id="ptDx" class="point top-point" r="3"></circle>
+        </g>
+
+        <g class="step-el aux" data-step="2">
+          <line id="viewCx" class="blue"></line>
+          <line id="viewBx" class="blue"></line>
+          <line id="viewDx" class="blue"></line>
+          <path id="fovArc" class="blue"></path>
+          <path id="trueFovArc" class="blue"></path>
+        </g>
+
+        <g class="step-el" data-step="2">
+          <circle id="ptS" class="point top-point drag" cx="188" cy="385" r="4"></circle>
+          <circle id="ptSPrime" class="point front-point drag" cx="188" cy="495" r="4"></circle>
+        </g>
+
+        <g class="step-el" data-step="3">
+          <circle id="ptFxTop" class="point top-point" r="3"></circle>
+          <circle id="ptFyTop" class="point top-point" r="3"></circle>
+          <circle id="ptFx" class="point front-point" r="3"></circle>
+          <circle id="ptFy" class="point front-point" r="3"></circle>
+        </g>
+
+        <g class="step-el aux" data-step="3">
+          <line id="fxDrop" class="thin dash projection-line"></line>
+          <line id="fyDrop" class="thin dash projection-line"></line>
+          <line id="guideSfx" class="guide s-vanish-line"></line>
+          <line id="guideSfy" class="guide s-vanish-line"></line>
+        </g>
+
+        <g class="step-el aux" data-step="4">
+          <line id="guideCxDown" class="guide dash projection-line"></line>
+          <line id="guideADown" class="guide dash projection-line"></line>
+          <line id="guideBxDown" class="guide dash projection-line"></line>
+          <line id="guideDxDown" class="guide dash projection-line"></line>
+          <line id="guideFxA" class="guide vanish-line"></line>
+          <line id="guideFxC" class="guide dash vanish-line"></line>
+          <line id="guideAFy" class="guide dash vanish-line"></line>
+          <line id="guideBFy" class="guide vanish-line"></line>
+          <line id="guideC0Fy" class="guide vanish-line"></line>
+          <line id="guideB0Fx" class="guide vanish-line"></line>
+          <line id="guideD0Fy" class="guide vanish-line"></line>
+        </g>
+
+        <g class="step-el" data-step="4">
+          <path id="bottomFaceVisible" class="object"></path>
+          <path id="bottomFaceHidden" class="hidden-edge"></path>
+          <line id="bottomA0B0" class="object"></line>
+          <line id="bottomA0C0" class="object"></line>
+          <line id="bottomC0D0" class="hidden-edge"></line>
+          <line id="bottomD0B0" class="hidden-edge"></line>
+          <circle id="ptA0" class="point front-point" r="3"></circle>
+          <circle id="ptB0" class="point front-point" r="3"></circle>
+          <circle id="ptC0" class="point front-point" r="3"></circle>
+          <circle id="ptD0" class="point front-point" r="3"></circle>
+        </g>
+
+        <g class="step-el aux" data-step="5">
+          <line id="guideFxATop" class="guide vanish-line"></line>
+          <line id="guideFxBTop" class="guide vanish-line"></line>
+          <line id="guideATopFy" class="guide vanish-line"></line>
+          <line id="guideBtopFx" class="guide vanish-line"></line>
+        </g>
+
+        <g class="step-el" data-step="5">
+          <line id="heightA" class="thin"></line>
+          <path id="topFaceHidden" class="hidden-edge"></path>
+          <path id="cubeBaseHidden" class="hidden-edge"></path>
+          <line id="edgeD" class="hidden-edge"></line>
+          <path id="topFaceVisible" class="object"></path>
+          <path id="cubeBaseVisible" class="object"></path>
+          <line id="edgeA" class="object"></line>
+          <line id="edgeB" class="object"></line>
+          <line id="edgeC" class="object"></line>
+          <line id="topA0B0" class="object"></line>
+          <line id="topA0C0" class="object"></line>
+          <line id="topC0D0" class="hidden-edge"></line>
+          <line id="topD0B0" class="hidden-edge"></line>
+          <circle id="ptATop" class="point front-point" r="3"></circle>
+          <circle id="ptBTop" class="point front-point" r="3"></circle>
+          <circle id="ptCTop" class="point front-point" r="3"></circle>
+          <circle id="ptDTop" class="point front-point" r="3"></circle>
+        </g>
+
+        <g id="frontFaceLayer" class="step-el" data-step="5">
+          <path id="frontFaceABFill" class="front-face"></path>
+          <path id="frontFaceACFill" class="front-face"></path>
+        </g>
+
+        <g id="realExampleLayer" class="step-el real-example" data-step="2">
+          <g id="exampleElevation">
+            <line id="personNeck" class="real-limb"></line>
+            <line id="personLeftArm" class="real-limb"></line>
+            <line id="personRightArm" class="real-limb"></line>
+            <line id="personLeftLeg" class="real-limb"></line>
+            <line id="personRightLeg" class="real-limb"></line>
+            <ellipse id="personTorso" class="real-body"></ellipse>
+            <ellipse id="personPelvis" class="real-body"></ellipse>
+            <circle id="personHead" class="real-body"></circle>
+            <circle id="personLeftHand" class="real-body"></circle>
+            <circle id="personRightHand" class="real-body"></circle>
+            <ellipse id="personLeftFoot" class="real-body"></ellipse>
+            <ellipse id="personRightFoot" class="real-body"></ellipse>
+            <circle id="personEye" class="real-eye"></circle>
+          </g>
+          <g id="exampleTopView">
+            <line id="personTopArmFx" class="real-limb"></line>
+            <line id="personTopArmFy" class="real-limb"></line>
+            <ellipse id="personTopBody" class="real-body"></ellipse>
+            <circle id="personTopHead" class="real-body"></circle>
+            <circle id="personTopHandFx" class="real-body"></circle>
+            <circle id="personTopHandFy" class="real-body"></circle>
+            <circle id="personTopEye" class="real-eye"></circle>
+          </g>
+        </g>
+
+        <g id="labelLayer">
+          <text class="zh" x="608" y="24" text-anchor="end">平行投影·俯视图·基面H</text>
+          <text class="zh" x="608" y="242" text-anchor="end">透视投影·前视图·画面K</text>
+          <text data-step="1" id="topOXLeftLabel" x="22" y="166">O</text>
+          <text data-step="1" id="topOXRightLabel" x="588" y="164">X</text>
+          <text data-step="1" x="21" y="557">O</text>
+          <text data-step="1" x="588" y="555">X</text>
+          <text data-step="1" id="frontHLeftLabel" x="23" y="496">h</text>
+          <text data-step="1" id="frontHRightLabel" x="586" y="496">h</text>
+          <text data-step="1" id="labelA"></text>
+          <text data-step="1" id="labelB"></text>
+          <text data-step="1" id="labelC"></text>
+          <text data-step="1" id="labelD"></text>
+          <text data-step="1" id="labelCx"></text>
+          <text data-step="1" id="labelBx"></text>
+          <text data-step="1" id="labelDx"></text>
+          <text data-step="2" id="labelS"></text>
+          <text data-step="2" id="labelSPrime"></text>
+          <text data-step="2" id="fovText" class="angle-label"></text>
+          <text data-step="3" id="labelFxTop"></text>
+          <text data-step="3" id="labelFyTop"></text>
+          <text data-step="3" id="labelFx"></text>
+          <text data-step="3" id="labelFy"></text>
+          <text data-step="4" id="labelA0"></text>
+          <text data-step="4" id="labelB0"></text>
+          <text data-step="4" id="labelC0"></text>
+          <text data-step="4" id="labelD0"></text>
+          <text data-step="5" id="labelATop"></text>
+          <text data-step="5" id="labelBTop"></text>
+          <text data-step="5" id="labelCTop"></text>
+          <text data-step="5" id="labelDTop"></text>
+        </g>
+
+        <g id="topLayer" class="step-el aux" data-step="2">
+          <line id="sDrop" class="blue dash projection-line"></line>
+        </g>
+      </g>
+
+      <g id="measureLabels">
+        <text data-step="1" x="13" y="556">O</text>
+        <text data-step="1" x="254" y="556">X</text>
+        <text data-step="1" class="zh" x="258" y="242" text-anchor="end">平行投影·侧视图</text>
+        <text data-step="1" id="measureZLabel" transform="translate(149 492.5) rotate(-90)">Z<tspan baseline-shift="-35%">1</tspan></text>
+      </g>
+    </svg>
+  </div>
+
+  <script>
+    const svg = document.getElementById("svg");
+    const $ = (id) => document.getElementById(id);
+    const MAIN_X = 270;
+    const INITIAL_H_Y = 495;
+    const BOTTOM_OX_Y = 555;
+    const MEASURE_BASE_Y = 555;
+    const MEASURE_TOP_MIN = 302;
+    const MEASURE_TOP_MAX = 520;
+    const H_BOUNDS = { xMin: 84, xMax: 270, yMin: 35, yMax: 165 };
+    const S_BOUNDS = { xMin: 70, xMax: 430, yMax: 475, oxGap: 8 };
+    const AB_VEC = { x: 75, y: -75 };
+    const AC_VEC = { x: -55, y: -55 };
+    let horizonY = INITIAL_H_Y;
+    let FX = { x: 60, y: horizonY };
+    let FY = { x: 550, y: horizonY };
+    const initial = {
+      a: { x: 140, y: 165 },
+      b: { x: 215, y: 90 },
+      c: { x: 85, y: 110 },
+      d: { x: 160, y: 35 }
+    };
+    const initialS = { x: 188, y: 385 };
+    const notes = {
+      1: "1）作透视图的布局。",
+      2: "2）确定视平线、视点位置和视角。",
+      3: "3）求出灭点：过 s 作 ac 的平行线交 OX 于 fₓ；过 s 作 ab 的平行线交 OX 于 fᵧ；再由 fₓ、fᵧ 竖投到 h，得到 Fₓ、Fᵧ。",
+      4: "4）由 S-c、S-d 与 OX 确定 cₓ、dₓ；x 点在 a 右侧取 Fᵧ，在 a 左侧取 Fₓ。",
+      5: "5）通过真高线求出高度；C⁰ = FₓA⁰ 与 cₓ 垂线交点，D⁰ = FₓB⁰ 与 dₓ 垂线交点。"
+    };
+    let rect = structuredClone(initial);
+    let sPoint = structuredClone(initialS);
+    let z1Height = 125;
+    let currentStep = 5;
+    let labelsVisible = true;
+    let auxVisible = true;
+    let examplesVisible = false;
+    let dragging = null;
+    let dragStart = null;
+    let rectStart = null;
+    let sStart = null;
+    let horizonStart = null;
+    let z1Start = null;
+    const paintSlots = new WeakMap();
+
+    function add(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
+    function sub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function rotate(v, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
+    }
+    function normalizeAngle(angle) {
+      while (angle > Math.PI) angle -= Math.PI * 2;
+      while (angle < -Math.PI) angle += Math.PI * 2;
+      return angle;
+    }
+    function rectFromA(a) {
+      const b = add(a, AB_VEC);
+      const c = add(a, AC_VEC);
+      const d = add(b, AC_VEC);
+      return { a, b, c, d };
+    }
+    function path(points) { return `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")} Z`; }
+    function openPath(points) { return `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")}`; }
+    function setLine(id, p, q) {
+      const el = $(id);
+      el.setAttribute("x1", p.x);
+      el.setAttribute("y1", p.y);
+      el.setAttribute("x2", q.x);
+      el.setAttribute("y2", q.y);
+    }
+    function setCircle(id, p) {
+      const el = $(id);
+      el.setAttribute("cx", p.x);
+      el.setAttribute("cy", p.y);
+    }
+    function setCircleSize(id, p, r) {
+      const el = $(id);
+      el.setAttribute("cx", p.x);
+      el.setAttribute("cy", p.y);
+      el.setAttribute("r", r);
+    }
+    function setEllipse(id, p, rx, ry, rotate = 0) {
+      const el = $(id);
+      el.setAttribute("cx", p.x);
+      el.setAttribute("cy", p.y);
+      el.setAttribute("rx", rx);
+      el.setAttribute("ry", ry);
+      el.setAttribute("transform", `rotate(${rotate} ${p.x} ${p.y})`);
+    }
+    function setText(id, p, text, dx = 0, dy = 0) {
+      const el = $(id);
+      el.setAttribute("x", p.x + dx);
+      el.setAttribute("y", p.y + dy);
+      el.textContent = text;
+    }
+    function setLabelAbove(id, p, text) {
+      const el = $(id);
+      el.setAttribute("x", p.x);
+      el.setAttribute("y", p.y - 12);
+      el.setAttribute("text-anchor", "middle");
+      el.textContent = text;
+    }
+    function setTextPos(id, x, y) {
+      const el = $(id);
+      el.setAttribute("x", x);
+      el.setAttribute("y", y);
+    }
+    function rememberPaintSlot(el) {
+      if (paintSlots.has(el)) return;
+      paintSlots.set(el, {
+        parent: el.parentNode,
+        next: el.nextSibling,
+        step: el.closest("[data-step]")?.dataset.step || "",
+        aux: Boolean(el.closest(".aux")),
+        ownAux: el.classList.contains("aux")
+      });
+    }
+    function sendToLightBlueBackLayer(el) {
+      const layer = $("lightBlueBackLayer");
+      if (!layer || el.parentNode === layer) return;
+      rememberPaintSlot(el);
+      const slot = paintSlots.get(el);
+      if (slot.step) el.dataset.step = slot.step;
+      el.classList.toggle("aux", slot.aux);
+      if (slot.step) el.classList.toggle("hidden", Number(slot.step) > currentStep);
+      layer.appendChild(el);
+    }
+    function restorePaintSlot(el) {
+      const slot = paintSlots.get(el);
+      if (!slot || el.parentNode !== $("lightBlueBackLayer")) return;
+      if (slot.next && slot.next.parentNode === slot.parent) {
+        slot.parent.insertBefore(el, slot.next);
+      } else {
+        slot.parent.appendChild(el);
+      }
+      if (slot.step) delete el.dataset.step;
+      el.classList.remove("hidden");
+      el.classList.toggle("aux", slot.ownAux);
+    }
+    function syncLightBluePaintOrder(el) {
+      const hasSemanticColor = el.classList.contains("projection-line") ||
+        el.classList.contains("s-vanish-line") ||
+        el.classList.contains("vanish-line");
+      const isLightBlue = !hasSemanticColor && (
+        el.classList.contains("light-blue-line") ||
+        ((el.classList.contains("blue") || el.classList.contains("guide")) && el.classList.contains("dash"))
+      );
+      if (isLightBlue) sendToLightBlueBackLayer(el);
+      else restorePaintSlot(el);
+    }
+    function syncAllLightBluePaintOrder() {
+      document.querySelectorAll("#mainDiagram .blue.dash, #mainDiagram .guide.dash, #mainDiagram .light-blue-line")
+        .forEach((el) => syncLightBluePaintOrder(el));
+    }
+    function setOccludedLine(id, occluded) {
+      const el = $(id);
+      el.classList.toggle("dot-dash", occluded);
+      el.classList.toggle("light-blue-line", occluded && (el.classList.contains("blue") || el.classList.contains("guide")));
+      syncLightBluePaintOrder(el);
+    }
+    function setOccludedLines(ids, occluded) {
+      ids.forEach((id) => setOccludedLine(id, occluded));
+    }
+    function setHiddenEdge(id, hidden) {
+      const el = $(id);
+      el.classList.toggle("hidden-edge", hidden);
+      el.classList.toggle("object", !hidden);
+      el.classList.remove("dot-dash");
+      el.classList.remove("light-blue-line");
+      syncLightBluePaintOrder(el);
+    }
+    function setHiddenEdges(ids, hidden) {
+      ids.forEach((id) => setHiddenEdge(id, hidden));
+    }
+    function currentOxY() { return rect.a.y; }
+    function clampHorizonY(y) {
+      return clamp(y, 230, BOTTOM_OX_Y - 12);
+    }
+    function clampSPoint(candidate) {
+      const oxY = currentOxY();
+      return {
+        x: clamp(candidate.x, S_BOUNDS.xMin, S_BOUNDS.xMax),
+        y: clamp(candidate.y, oxY + S_BOUNDS.oxGap, S_BOUNDS.yMax)
+      };
+    }
+    function clampSPrimeDrag(candidate) {
+      return {
+        x: clamp(candidate.x, S_BOUNDS.xMin, S_BOUNDS.xMax),
+        y: clampHorizonY(candidate.y)
+      };
+    }
+    function globalPointFromEvent(event) {
+      const pt = svg.createSVGPoint();
+      pt.x = event.clientX;
+      pt.y = event.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+    function mainPointFromEvent(event) {
+      const p = globalPointFromEvent(event);
+      return { x: p.x - MAIN_X, y: p.y };
+    }
+    function lineIntersection(p1, p2, p3, p4) {
+      const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+      if (Math.abs(d) < 1e-9) return { x: p2.x, y: p2.y };
+      const x = ((p1.x * p2.y - p1.y * p2.x) * (p3.x - p4.x) - (p1.x - p2.x) * (p3.x * p4.y - p3.y * p4.x)) / d;
+      const y = ((p1.x * p2.y - p1.y * p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x * p4.y - p3.y * p4.x)) / d;
+      return { x, y };
+    }
+    function verticalIntersection(x, p, q) {
+      const t = (x - p.x) / (q.x - p.x);
+      return { x, y: p.y + (q.y - p.y) * t };
+    }
+    function pointOnVanishingLineAtX(x, basePoint, vanishingPoint) {
+      return verticalIntersection(x, basePoint, vanishingPoint);
+    }
+    function parallelTraceOnOx(origin, dir, oxY) {
+      if (Math.abs(dir.y) < 1e-9) return { x: origin.x, y: oxY };
+      const t = (oxY - origin.y) / dir.y;
+      return { x: origin.x + dir.x * t, y: oxY };
+    }
+    function segmentIntersectionParams(p1, p2, q1, q2) {
+      const r = sub(p2, p1);
+      const s = sub(q2, q1);
+      const den = r.x * s.y - r.y * s.x;
+      if (Math.abs(den) < 1e-9) return null;
+      const qp = sub(q1, p1);
+      const t = (qp.x * s.y - qp.y * s.x) / den;
+      const u = (qp.x * r.y - qp.y * r.x) / den;
+      return { t, u, point: add(p1, { x: r.x * t, y: r.y * t }) };
+    }
+    function samePoint(p, q, eps = 1e-6) {
+      return Math.hypot(p.x - q.x, p.y - q.y) <= eps;
+    }
+    function pointToward(from, to, length, fallback = { x: 1, y: 0 }) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const n = Math.hypot(dx, dy);
+      if (n < 1e-9) return { x: from.x + fallback.x * length, y: from.y + fallback.y * length };
+      return { x: from.x + dx / n * length, y: from.y + dy / n * length };
+    }
+    function angleFromTo(from, to) {
+      return Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI;
+    }
+    function renderRealExample(S, sPrime, FX, FY, fxTop, fyTop) {
+      const footY = BOTTOM_OX_Y;
+      const height = Math.max(24, footY - sPrime.y);
+      const x = sPrime.x;
+      const headR = height / 13.0;
+      const torsoHalf = height * 0.105;
+      const torsoRy = Math.max(5, height * 0.17);
+      const pelvisRx = height * 0.082;
+      const pelvisRy = Math.max(2.4, height * 0.045);
+      const armAnchorHalf = torsoHalf * 0.70;
+      const legAnchorHalf = pelvisRx * 0.52;
+      const topHandBaseLength = height * 0.43;
+      const footHalf = height * 0.055;
+      const handR = height * 0.030;
+      const footR = height * 0.034;
+      const eye = { x, y: sPrime.y };
+      const headCenter = { x, y: sPrime.y + headR * 0.18 };
+      const headBottom = headCenter.y + headR;
+      const torsoTop = headBottom + 0.5;
+      const torsoCenter = { x, y: torsoTop + torsoRy };
+      const torsoBottom = torsoCenter.y + torsoRy;
+      const pelvisCenter = { x, y: torsoBottom + pelvisRy * 0.65 };
+      const neckTop = { x, y: headBottom - headR * 0.10 };
+      const neckBottom = { x, y: torsoTop + height * 0.025 };
+      const leftShoulder = { x: x - armAnchorHalf, y: torsoTop + torsoRy * 0.18 };
+      const rightShoulder = { x: x + armAnchorHalf, y: torsoTop + torsoRy * 0.18 };
+      const leftHip = { x: x - legAnchorHalf, y: pelvisCenter.y + pelvisRy * 0.20 };
+      const rightHip = { x: x + legAnchorHalf, y: pelvisCenter.y + pelvisRy * 0.20 };
+      const leftFoot = { x: x - footHalf, y: footY };
+      const rightFoot = { x: x + footHalf, y: footY };
+
+      const topLen = height * 0.30;
+      const topWidth = height * 0.18;
+      const topBodyAngle = angleFromTo(fxTop, fyTop);
+      const topHandFx = pointToward(S, fxTop, topHandBaseLength, { x: -1, y: 0 });
+      const topHandFy = pointToward(S, fyTop, topHandBaseLength, { x: 1, y: 0 });
+      const topViewHandLengthOnScreen = Math.hypot(topHandFx.x - S.x, topHandFx.y - S.y);
+      const sToFxLength = Math.hypot(fxTop.x - S.x, fxTop.y - S.y);
+      const sPrimeToFxLength = Math.hypot(FX.x - sPrime.x, FX.y - sPrime.y);
+      const frontViewHandLengthOnScreen = sToFxLength > 1e-9
+        ? topViewHandLengthOnScreen / sToFxLength * sPrimeToFxLength
+        : 0;
+      const leftHand = pointToward(leftShoulder, FX, frontViewHandLengthOnScreen, { x: -1, y: 0 });
+      const rightHand = pointToward(rightShoulder, FY, frontViewHandLengthOnScreen, { x: 1, y: 0 });
+
+      setCircleSize("personHead", headCenter, headR);
+      setCircleSize("personEye", eye, Math.max(1.2, height * 0.018));
+      setEllipse("personTorso", torsoCenter, torsoHalf, torsoRy);
+      setEllipse("personPelvis", pelvisCenter, pelvisRx, pelvisRy);
+      setLine("personNeck", neckTop, neckBottom);
+      setLine("personLeftArm", leftShoulder, leftHand);
+      setLine("personRightArm", rightShoulder, rightHand);
+      setLine("personLeftLeg", leftHip, leftFoot);
+      setLine("personRightLeg", rightHip, rightFoot);
+      setCircleSize("personLeftHand", leftHand, handR);
+      setCircleSize("personRightHand", rightHand, handR);
+      setEllipse("personLeftFoot", leftFoot, footR * 1.5, footR * 0.8);
+      setEllipse("personRightFoot", rightFoot, footR * 1.5, footR * 0.8);
+
+      setEllipse("personTopBody", S, topLen / 2, topWidth / 2, topBodyAngle);
+      setCircleSize("personTopHead", S, headR);
+      setLine("personTopArmFx", S, topHandFx);
+      setLine("personTopArmFy", S, topHandFy);
+      setCircleSize("personTopHandFx", topHandFx, handR);
+      setCircleSize("personTopHandFy", topHandFy, handR);
+      setCircleSize("personTopEye", S, Math.max(1.2, height * 0.018));
+    }
+    function pointInPolygon(point, polygon) {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const pi = polygon[i], pj = polygon[j];
+        const crosses = (pi.y > point.y) !== (pj.y > point.y);
+        if (!crosses) continue;
+        const x = (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x;
+        if (point.x < x) inside = !inside;
+      }
+      return inside;
+    }
+    function segmentCoveredByFace(p, q, face) {
+      for (let i = 1; i < 12; i++) {
+        const t = i / 12;
+        const sample = {
+          x: p.x + (q.x - p.x) * t,
+          y: p.y + (q.y - p.y) * t
+        };
+        if (pointInPolygon(sample, face)) return true;
+      }
+      return false;
+    }
+    function segmentCoveredByAnyFace(p, q, faces) {
+      return faces.some((face) => segmentCoveredByFace(p, q, face));
+    }
+    function isBlockedByFrontEdge(target, edgeStart, edgeEnd) {
+      const hit = segmentIntersectionParams(sPoint, target, edgeStart, edgeEnd);
+      if (!hit) return false;
+      const eps = 1e-6;
+      if (hit.t <= eps || hit.t >= 1 - eps) return false;
+      if (hit.u < -eps || hit.u > 1 + eps) return false;
+      return !samePoint(hit.point, target);
+    }
+    function isSightLineVisible(target, a, b, c) {
+      return !isBlockedByFrontEdge(target, a, b) && !isBlockedByFrontEdge(target, a, c);
+    }
+    function tracePointOnOx(p) {
+      const oxY = currentOxY();
+      return lineIntersection(sPoint, p, { x: 42, y: oxY }, { x: 582, y: oxY });
+    }
+    function vanishingPointForTrace(trace, a) {
+      return trace.x >= a.x ? FY : FX;
+    }
+    function angleDeg(a, o, b) {
+      const v1 = sub(a, o);
+      const v2 = sub(b, o);
+      const dot = v1.x * v2.x + v1.y * v2.y;
+      const n1 = Math.hypot(v1.x, v1.y);
+      const n2 = Math.hypot(v2.x, v2.y);
+      return Math.acos(clamp(dot / (n1 * n2), -1, 1)) * 180 / Math.PI;
+    }
+    function polarAngle(o, p) {
+      return Math.atan2(p.y - o.y, p.x - o.x);
+    }
+    function arcPath(o, p1, p2, r) {
+      let a1 = polarAngle(o, p1);
+      let a2 = polarAngle(o, p2);
+      while (a2 < a1) a2 += Math.PI * 2;
+      if (a2 - a1 > Math.PI) [a1, a2] = [a2, a1 + Math.PI * 2];
+      const start = { x: o.x + Math.cos(a1) * r, y: o.y + Math.sin(a1) * r };
+      const end = { x: o.x + Math.cos(a2) * r, y: o.y + Math.sin(a2) * r };
+      return `M ${start.x} ${start.y} A ${r} ${r} 0 0 1 ${end.x} ${end.y}`;
+    }
+    function fovLabelPoint(o, p1, p2, r) {
+      let a1 = polarAngle(o, p1);
+      let a2 = polarAngle(o, p2);
+      while (a2 < a1) a2 += Math.PI * 2;
+      if (a2 - a1 > Math.PI) [a1, a2] = [a2, a1 + Math.PI * 2];
+      const mid = (a1 + a2) / 2;
+      return { x: o.x + Math.cos(mid) * (r + 16), y: o.y + Math.sin(mid) * (r + 16) };
+    }
+    function translateRect(r, delta) {
+      const moved = {
+        a: add(r.a, delta),
+        b: add(r.b, delta),
+        c: add(r.c, delta),
+        d: add(r.d, delta)
+      };
+      const xs = [moved.a.x, moved.b.x, moved.c.x, moved.d.x];
+      const ys = [moved.a.y, moved.b.y, moved.c.y, moved.d.y];
+      const xLo = H_BOUNDS.xMin - Math.min(...xs);
+      const xHi = H_BOUNDS.xMax - Math.max(...xs);
+      const yLo = H_BOUNDS.yMin - Math.min(...ys);
+      const yHi = H_BOUNDS.yMax - Math.max(...ys);
+      const correction = { x: clamp(0, xLo, xHi), y: clamp(0, yLo, yHi) };
+      return {
+        a: add(moved.a, correction),
+        b: add(moved.b, correction),
+        c: add(moved.c, correction),
+        d: add(moved.d, correction)
+      };
+    }
+    function rotateRectAroundA(baseRect, angle) {
+      const ab = sub(baseRect.b, baseRect.a);
+      const ac = sub(baseRect.c, baseRect.a);
+      const b = add(baseRect.a, rotate(ab, angle));
+      const c = add(baseRect.a, rotate(ac, angle));
+      return { a: baseRect.a, b, c, d: add(b, sub(c, baseRect.a)) };
+    }
+    function isTopRectValid(r) {
+      const oxGap = 0.5;
+      return r.b.y < r.a.y - oxGap && r.c.y < r.a.y - oxGap;
+    }
+    function dragRectFromD(baseRect, targetD) {
+      const startDiag = sub(baseRect.d, baseRect.a);
+      const targetDiag = sub(targetD, baseRect.a);
+      if (Math.hypot(targetDiag.x, targetDiag.y) < 1e-9) return baseRect;
+      const angle = normalizeAngle(
+        Math.atan2(targetDiag.y, targetDiag.x) - Math.atan2(startDiag.y, startDiag.x)
+      );
+      const direct = rotateRectAroundA(baseRect, angle);
+      if (isTopRectValid(direct)) return direct;
+      let lo = 0;
+      let hi = 1;
+      for (let i = 0; i < 36; i++) {
+        const t = (lo + hi) / 2;
+        const probe = rotateRectAroundA(baseRect, angle * t);
+        if (isTopRectValid(probe)) lo = t;
+        else hi = t;
+      }
+      return rotateRectAroundA(baseRect, angle * lo);
+    }
+    function renderMeasure() {
+      const topY = MEASURE_BASE_Y - z1Height;
+      $("measureRect").setAttribute("y", topY);
+      $("measureRect").setAttribute("height", z1Height);
+      setLine("measureDim", { x: 166, y: topY }, { x: 166, y: MEASURE_BASE_Y });
+      setLine("measureTickTop", { x: 158, y: topY }, { x: 174, y: topY });
+      setCircle("measureHandle", { x: 132, y: topY });
+      $("measureZLabel").setAttribute("transform", `translate(149 ${(topY + MEASURE_BASE_Y) / 2}) rotate(-90)`);
+    }
+    function render() {
+      renderMeasure();
+      const a = rect.a, b = rect.b, c = rect.c, d = rect.d;
+      const S = sPoint;
+      const oxY = currentOxY();
+      const abDir = sub(b, a);
+      const acDir = sub(c, a);
+      const fxTop = parallelTraceOnOx(S, acDir, oxY);
+      const fyTop = parallelTraceOnOx(S, abDir, oxY);
+      FX = { x: fxTop.x, y: horizonY };
+      FY = { x: fyTop.x, y: horizonY };
+      const sPrime = { x: S.x, y: horizonY };
+      const bVisible = isSightLineVisible(b, a, b, c);
+      const cVisible = isSightLineVisible(c, a, b, c);
+      const dVisible = isSightLineVisible(d, a, b, c);
+      const cx = tracePointOnOx(c);
+      const bx = tracePointOnOx(b);
+      const dx = tracePointOnOx(d);
+
+      setLine("topOX", { x: 42, y: oxY }, { x: 582, y: oxY });
+      setTextPos("topOXLeftLabel", 22, oxY + 1);
+      setTextPos("topOXRightLabel", 588, oxY - 1);
+      setLine("frontHLine", { x: 42, y: horizonY }, { x: 582, y: horizonY });
+      setTextPos("frontHLeftLabel", 23, horizonY + 1);
+      setTextPos("frontHRightLabel", 586, horizonY + 1);
+      $("frontSkyFill").setAttribute("height", Math.max(0, horizonY - 219));
+      $("frontGroundFill").setAttribute("y", horizonY);
+      $("frontGroundFill").setAttribute("height", Math.max(0, 579 - horizonY));
+      setCircle("ptFxTop", fxTop); setCircle("ptFyTop", fyTop);
+      setCircle("ptFx", FX); setCircle("ptFy", FY);
+      setLabelAbove("labelFxTop", fxTop, "fₓ");
+      setLabelAbove("labelFyTop", fyTop, "fᵧ");
+      setLabelAbove("labelFx", FX, "Fₓ");
+      setLabelAbove("labelFy", FY, "Fᵧ");
+      setLine("fxDrop", fxTop, FX); setLine("fyDrop", fyTop, FY);
+      setLine("guideSfx", S, fxTop); setLine("guideSfy", S, fyTop);
+
+      setCircle("ptS", S); setCircle("ptSPrime", sPrime);
+      setLabelAbove("labelS", S, "s", 8);
+      setLabelAbove("labelSPrime", sPrime, "s′", 8);
+      setLine("sDrop", S, sPrime);
+      renderRealExample(S, sPrime, FX, FY, fxTop, fyTop);
+
+      $("planShape").setAttribute("d", path([a, b, d, c]));
+      setLine("planAB", a, b);
+      setCircle("ptA", a); setCircle("ptB", b); setCircle("ptC", c); setCircle("ptD", d);
+      setCircle("ptCx", cx); setCircle("ptBx", bx); setCircle("ptDx", dx);
+      setLabelAbove("labelA", a, "a", 6);
+      setLabelAbove("labelB", b, "b", 6);
+      setLabelAbove("labelC", c, "c", -16);
+      setLabelAbove("labelD", d, "d", -6);
+      setLabelAbove("labelCx", cx, "cₓ", -18);
+      setLabelAbove("labelBx", bx, "bₓ", 6);
+      setLabelAbove("labelDx", dx, "dₓ", 6);
+
+      setLine("viewCx", S, c); setLine("viewBx", S, b); setLine("viewDx", S, d);
+      setOccludedLine("viewCx", !cVisible);
+      setOccludedLine("viewBx", !bVisible);
+      setOccludedLine("viewDx", !dVisible);
+      $("fovArc").setAttribute("d", "");
+      $("trueFovArc").setAttribute("d", "");
+      $("fovText").textContent = "";
+
+      const a0 = { x: a.x, y: BOTTOM_OX_Y };
+      const b0 = verticalIntersection(bx.x, a0, FY);
+      const c0 = pointOnVanishingLineAtX(cx.x, a0, FX);
+      const d0 = pointOnVanishingLineAtX(dx.x, b0, FX);
+      setLine("guideCxDown", cx, c0); setLine("guideADown", a, a0);
+      setLine("guideBxDown", bx, b0); setLine("guideDxDown", dx, d0);
+      setLine("guideFxA", FX, a0);
+      setLine("guideFxC", FX, c0);
+      setLine("guideAFy", a0, FY); setLine("guideBFy", b0, FY);
+      setLine("guideC0Fy", c0, FY); setLine("guideB0Fx", b0, FX);
+      setLine("guideD0Fy", FY, d0);
+      $("bottomFaceVisible").setAttribute("d", "");
+      $("bottomFaceHidden").setAttribute("d", "");
+      setLine("bottomA0B0", a0, b0);
+      setLine("bottomA0C0", a0, c0);
+      setLine("bottomC0D0", c0, d0);
+      setLine("bottomD0B0", d0, b0);
+      setCircle("ptA0", a0); setCircle("ptB0", b0); setCircle("ptC0", c0); setCircle("ptD0", d0);
+      setLabelAbove("labelA0", a0, "a⁰");
+      setLabelAbove("labelB0", b0, "b⁰");
+      setLabelAbove("labelC0", c0, "c⁰");
+      setLabelAbove("labelD0", d0, "d⁰");
+
+      const A0 = { x: a0.x, y: a0.y - z1Height };
+      const B0 = verticalIntersection(b0.x, A0, FY);
+      const C0 = verticalIntersection(cx.x, FX, A0);
+      const D0 = verticalIntersection(dx.x, FX, B0);
+      setLine("heightA", a0, A0);
+      setLine("measureTopToA0", { x: 174, y: MEASURE_BASE_Y - z1Height }, { x: MAIN_X + A0.x, y: A0.y });
+      $("cubeBaseVisible").setAttribute("d", "");
+      $("cubeBaseHidden").setAttribute("d", "");
+      $("topFaceVisible").setAttribute("d", "");
+      $("topFaceHidden").setAttribute("d", "");
+      $("frontFaceABFill").setAttribute("d", "");
+      $("frontFaceACFill").setAttribute("d", "");
+      setLine("edgeA", a0, A0); setLine("edgeB", b0, B0);
+      setLine("edgeC", c0, C0); setLine("edgeD", d0, D0);
+      setLine("topA0B0", A0, B0);
+      setLine("topA0C0", A0, C0);
+      setLine("topC0D0", C0, D0);
+      setLine("topD0B0", D0, B0);
+      setLine("guideFxATop", FX, A0);
+      setLine("guideFxBTop", FX, B0);
+      setLine("guideATopFy", A0, FY);
+      setLine("guideBtopFx", B0, FX);
+      setCircle("ptATop", A0); setCircle("ptBTop", B0); setCircle("ptCTop", C0); setCircle("ptDTop", D0);
+      const abFace = [A0, B0, b0, a0];
+      const acFace = [A0, C0, c0, a0];
+      const frontFaces = [abFace, acFace];
+      const cBehindFace = !cVisible || segmentCoveredByAnyFace(c0, C0, [abFace]);
+      const dBehindFace = !dVisible || segmentCoveredByAnyFace(d0, D0, frontFaces);
+      const cdBehindFace = cBehindFace || dBehindFace || segmentCoveredByAnyFace(c0, d0, frontFaces) || segmentCoveredByAnyFace(C0, D0, frontFaces);
+
+      setOccludedLines(["guideCxDown"], cBehindFace);
+      setOccludedLines(["guideDxDown"], dBehindFace);
+      setHiddenEdges(["bottomA0C0", "edgeC", "topA0C0"], cBehindFace);
+      setHiddenEdges(["edgeB"], !bVisible);
+      setHiddenEdges(["bottomD0B0", "edgeD", "topD0B0"], dBehindFace);
+      setHiddenEdges(["bottomC0D0", "topC0D0"], cdBehindFace);
+      if (horizonY < A0.y) {
+        setHiddenEdges(["bottomA0C0", "bottomC0D0", "bottomD0B0", "topA0C0", "topC0D0", "topD0B0"], false);
+      }
+
+      setOccludedLine("guideFxA", segmentCoveredByAnyFace(a0, FX, frontFaces));
+      setOccludedLine("guideFxC", cBehindFace || segmentCoveredByAnyFace(c0, FX, frontFaces));
+      setOccludedLine("guideB0Fx", dBehindFace || segmentCoveredByAnyFace(b0, FX, frontFaces));
+      setOccludedLine("guideFxATop", segmentCoveredByAnyFace(A0, FX, frontFaces));
+      setOccludedLine("guideFxBTop", dBehindFace || segmentCoveredByAnyFace(B0, FX, frontFaces));
+      setOccludedLine("guideAFy", segmentCoveredByAnyFace(a0, FY, frontFaces));
+      setOccludedLine("guideBFy", segmentCoveredByAnyFace(b0, FY, frontFaces));
+      setOccludedLine("guideC0Fy", cBehindFace || segmentCoveredByAnyFace(c0, FY, frontFaces));
+      setOccludedLine("guideD0Fy", dBehindFace || segmentCoveredByAnyFace(d0, FY, frontFaces));
+      setOccludedLine("guideATopFy", segmentCoveredByAnyFace(A0, FY, frontFaces));
+      setOccludedLine("guideBtopFx", segmentCoveredByAnyFace(B0, FX, frontFaces));
+      setLabelAbove("labelATop", A0, "A⁰");
+      setLabelAbove("labelBTop", B0, "B⁰");
+      setLabelAbove("labelCTop", C0, "C⁰");
+      setLabelAbove("labelDTop", D0, "D⁰");
+      syncAllLightBluePaintOrder();
+      notes[2] = "2）确定视平线、视点位置和投射线：S-c、S-b、S-d 与 OX 分别交于 cₓ、bₓ、dₓ。";
+      if (currentStep === 2) $("note").textContent = notes[2];
+    }
+    function setStep(step) {
+      currentStep = step;
+      document.querySelectorAll("[data-step]").forEach((el) => {
+        el.classList.toggle("hidden", Number(el.dataset.step) > currentStep);
+      });
+      document.querySelectorAll("[data-step-button]").forEach((button) => {
+        button.classList.toggle("active", Number(button.dataset.stepButton) === currentStep);
+      });
+      $("note").textContent = notes[currentStep];
+    }
+    document.querySelectorAll("[data-step-button]").forEach((button) => {
+      button.addEventListener("click", () => setStep(Number(button.dataset.stepButton)));
+    });
+    $("labelToggleBtn").addEventListener("click", () => {
+      labelsVisible = !labelsVisible;
+      svg.classList.toggle("labels-hidden", !labelsVisible);
+      $("labelToggleBtn").textContent = labelsVisible ? "隐藏标注" : "显示标注";
+    });
+    $("auxToggleBtn").addEventListener("click", () => {
+      auxVisible = !auxVisible;
+      svg.classList.toggle("aux-hidden", !auxVisible);
+      $("auxToggleBtn").textContent = auxVisible ? "隐藏辅助线" : "显示辅助线";
+    });
+    $("exampleToggleBtn").addEventListener("click", () => {
+      examplesVisible = !examplesVisible;
+      svg.classList.toggle("examples-hidden", !examplesVisible);
+      $("exampleToggleBtn").textContent = examplesVisible ? "隐藏实物示例" : "显示实物示例";
+    });
+    $("resetBtn").addEventListener("click", () => {
+      rect = structuredClone(initial);
+      sPoint = structuredClone(initialS);
+      horizonY = INITIAL_H_Y;
+      z1Height = 125;
+      render();
+    });
+    $("ptA").addEventListener("pointerdown", (event) => {
+      dragging = "a";
+      dragStart = mainPointFromEvent(event);
+      rectStart = structuredClone(rect);
+      svg.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    $("ptD").addEventListener("pointerdown", (event) => {
+      dragging = "d";
+      dragStart = mainPointFromEvent(event);
+      rectStart = structuredClone(rect);
+      svg.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    $("ptS").addEventListener("pointerdown", (event) => {
+      dragging = "s";
+      dragStart = mainPointFromEvent(event);
+      sStart = structuredClone(sPoint);
+      svg.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    $("ptSPrime").addEventListener("pointerdown", (event) => {
+      dragging = "sPrime";
+      dragStart = mainPointFromEvent(event);
+      sStart = structuredClone(sPoint);
+      horizonStart = horizonY;
+      svg.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    for (const id of ["measureRect", "measureHandle"]) {
+      $(id).addEventListener("pointerdown", (event) => {
+        dragging = "z1";
+        dragStart = globalPointFromEvent(event);
+        z1Start = z1Height;
+        svg.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+    }
+    svg.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      if (dragging === "a") {
+        const p = mainPointFromEvent(event);
+        rect = translateRect(rectStart, sub(p, dragStart));
+        sPoint = clampSPoint(sPoint);
+      }
+      if (dragging === "d") {
+        const p = mainPointFromEvent(event);
+        rect = dragRectFromD(rectStart, add(rectStart.d, sub(p, dragStart)));
+        sPoint = clampSPoint(sPoint);
+      }
+      if (dragging === "s") {
+        const p = mainPointFromEvent(event);
+        const candidate = add(sStart, sub(p, dragStart));
+        sPoint = clampSPoint(candidate);
+      }
+      if (dragging === "sPrime") {
+        const p = mainPointFromEvent(event);
+        const candidate = {
+          x: sStart.x + p.x - dragStart.x,
+          y: horizonStart + p.y - dragStart.y
+        };
+        const clamped = clampSPrimeDrag(candidate);
+        sPoint = clampSPoint({ x: clamped.x, y: sPoint.y });
+        horizonY = clamped.y;
+      }
+      if (dragging === "z1") {
+        const p = globalPointFromEvent(event);
+        z1Height = clamp(z1Start + dragStart.y - p.y, MEASURE_BASE_Y - MEASURE_TOP_MAX, MEASURE_BASE_Y - MEASURE_TOP_MIN);
+      }
+      render();
+    });
+    svg.addEventListener("pointerup", () => { dragging = null; });
+    svg.addEventListener("pointercancel", () => { dragging = null; });
+    render();
+    svg.classList.toggle("examples-hidden", !examplesVisible);
+    setStep(5);
+  </script>
+</body>
+</html>

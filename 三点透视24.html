@@ -1,0 +1,4517 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>三点透视</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+    }
+
+    .wrap {
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: #fff;
+    }
+
+    .panel {
+      --panel-bottom-height: clamp(164px, 24vh, 204px);
+      position: relative;
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 34px minmax(0, 1fr) var(--panel-bottom-height);
+      border: 1px solid #d7dde3;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .panel-title {
+      position: static;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #20262d;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #front2d {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      background: #fff;
+    }
+
+    #space3d {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      background: #fff;
+      touch-action: none;
+    }
+
+    .space3d-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .space-label-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .space-label {
+      position: absolute;
+      transform: translate(-50%, -120%);
+      color: #20262d;
+      font: 600 12px Arial, "Microsoft YaHei", sans-serif;
+      text-shadow: 0 1px 3px #fff, 0 -1px 3px #fff, 1px 0 3px #fff, -1px 0 3px #fff;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .space-face-label {
+      transform: translate(-50%, -50%);
+      padding: 2px 6px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.78);
+      font-size: 12px;
+    }
+
+    .space-angle-label {
+      transform: translate(-50%, -50%);
+      font-size: 12px;
+    }
+
+    .space-select-info {
+      z-index: 3;
+      min-width: 96px;
+      max-width: 320px;
+      min-height: 18px;
+      box-sizing: border-box;
+      border: 1px solid #cfd6dd;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #20262d;
+      font: 12px Arial, "Microsoft YaHei", sans-serif;
+      line-height: 1.45;
+      padding: 8px 10px;
+      pointer-events: none;
+    }
+
+    .space-select-info:empty::before {
+      content: "点击三维点、线或画面查看注释";
+      color: #77818b;
+    }
+
+    .space-select-info strong {
+      font-size: 13px;
+    }
+
+    .space-message {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #5f6973;
+      font: 13px Arial, "Microsoft YaHei", sans-serif;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .space-controls {
+      --space-button-width: 98px;
+      --space-row-gap: 1px;
+      z-index: 3;
+      display: grid;
+      grid-template-rows: repeat(3, minmax(32px, 1fr)) minmax(42px, 1.15fr);
+      align-items: stretch;
+      gap: 3px;
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      pointer-events: auto;
+    }
+
+    .space-control-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-row-gap);
+      width: 100%;
+      min-height: 0;
+    }
+
+    .space-control-row button {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+    }
+
+    .space-controls button,
+    .space-controls label {
+      border: 1px solid #cfd6dd;
+      border-radius: 6px;
+      background: #fff;
+      color: #20262d;
+      font: 600 12px Arial, "Microsoft YaHei", sans-serif;
+      padding: 5px 9px;
+      box-sizing: border-box;
+    }
+
+    .space-controls button {
+      cursor: pointer;
+    }
+
+    .space-controls button.is-active {
+      background: #20262d;
+      color: #fff;
+      border-color: #20262d;
+    }
+
+    .space-controls label {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .space-fov-row label {
+      flex: 4 1 0;
+      width: auto;
+      min-width: 0;
+      min-height: 40px;
+    }
+
+    .space-fov-row button {
+      flex: 0 1 72px;
+      width: auto;
+      max-width: 88px;
+      min-width: 56px;
+    }
+
+    .space-controls input[type="range"] {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+    }
+
+    .space-controls input[type="range"]:disabled {
+      cursor: default;
+      opacity: 0.72;
+    }
+
+    #front2d {
+      touch-action: none;
+    }
+
+    .front-controls {
+      --front-button-width: 112px;
+      --front-row-gap: 1px;
+      --front-row-width: calc(var(--front-button-width) * 3 + var(--front-row-gap) * 2);
+      z-index: 3;
+      display: grid;
+      grid-template-rows: 30px 30px 30px minmax(0, 1fr);
+      align-items: stretch;
+      gap: 3px;
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      pointer-events: auto;
+    }
+
+    .front-controls button,
+    .front-controls label {
+      border: 1px solid #cfd6dd;
+      border-radius: 6px;
+      background: #fff;
+      color: #20262d;
+      font: 600 12px Arial, "Microsoft YaHei", sans-serif;
+      padding: 5px 9px;
+      box-sizing: border-box;
+    }
+
+    .front-controls button {
+      cursor: pointer;
+    }
+
+    .fov-controls {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      align-items: stretch;
+      gap: var(--front-row-gap);
+      width: 100%;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: var(--front-row-gap);
+      justify-content: flex-end;
+      width: 100%;
+    }
+
+    .control-group button {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+    }
+
+    .display-mode-controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--front-row-gap);
+      width: 100%;
+    }
+
+    .display-mode-controls button {
+      width: auto;
+      min-width: 0;
+      padding-left: 4px;
+      padding-right: 4px;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .front-slider-row {
+      display: flex;
+      align-items: stretch;
+      gap: var(--front-row-gap);
+      width: 100%;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .front-slider-row label {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      gap: 2px;
+      white-space: nowrap;
+      padding-left: 4px;
+      padding-right: 4px;
+    }
+
+    .front-slider-row label span {
+      flex: 0 0 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 10px;
+      line-height: 1.1;
+    }
+
+    .front-slider-row input[type="range"] {
+      flex: 1 1 auto;
+      min-width: 0;
+      width: auto;
+      margin: 0;
+      accent-color: #4b8f6b;
+    }
+
+    .front-step-btn {
+      flex: 0 0 22px;
+      width: 22px;
+      min-width: 22px;
+      padding-left: 0;
+      padding-right: 0;
+      text-align: center;
+    }
+
+    .symbol-info {
+      z-index: 3;
+      max-width: 320px;
+      border: 1px solid #cfd6dd;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #20262d;
+      font: 12px Arial, "Microsoft YaHei", sans-serif;
+      line-height: 1.45;
+      padding: 8px 10px;
+      pointer-events: none;
+    }
+
+    .symbol-info:empty::before {
+      content: "点击或拖拽二维点查看注释";
+      color: #77818b;
+    }
+
+    .symbol-info strong {
+      font-size: 13px;
+    }
+
+    .front-controls button.is-active {
+      border-color: #20262d;
+      background: #20262d;
+      color: #fff;
+    }
+
+    .panel-bottom {
+      display: grid;
+      grid-template-columns: minmax(72px, 15%) minmax(0, 1fr);
+      gap: 0;
+      min-width: 0;
+      min-height: 0;
+      border-top: 1px solid #d7dde3;
+      background: #f7f9fb;
+    }
+
+    .panel-bottom .space-select-info,
+    .panel-bottom .symbol-info {
+      position: static;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      min-width: 0;
+      min-height: 0;
+      box-sizing: border-box;
+      border: 0;
+      border-right: 1px solid #d7dde3;
+      border-radius: 0;
+      background: #fbfcfd;
+      overflow: auto;
+      pointer-events: auto;
+    }
+
+    .panel-bottom .space-controls,
+    .panel-bottom .front-controls {
+      box-sizing: border-box;
+      padding: 6px;
+    }
+
+    .panel-bottom .space-controls {
+      padding: 5px 6px 6px;
+    }
+
+
+    @media (max-width: 900px) {
+      .wrap {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+
+      .panel {
+        --panel-bottom-height: clamp(158px, 26vh, 184px);
+        grid-template-rows: 30px minmax(0, 1fr) var(--panel-bottom-height);
+      }
+
+      .panel-title {
+        font-size: 13px;
+      }
+
+      .panel-bottom {
+        grid-template-columns: minmax(64px, 18%) minmax(0, 1fr);
+      }
+
+      .front-controls {
+        grid-template-rows: 25px 25px 25px minmax(0, 1fr);
+      }
+
+      .front-controls button,
+      .front-controls label,
+      .space-controls button,
+      .space-controls label {
+        font-size: 10px;
+        padding: 3px 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel space-panel">
+    <div class="panel-title">三维空间</div>
+    <div class="space3d-wrap">
+      <canvas id="space3d" aria-label="三维空间"></canvas>
+      <div id="space3dLabels" class="space-label-layer" aria-hidden="true"></div>
+    </div>
+    <div class="panel-bottom">
+      <div id="spaceSelectInfo" class="space-select-info"></div>
+      <div class="space-controls">
+        <div class="space-control-row">
+          <button id="spaceProjectionToggleBtn" type="button">透视投影</button>
+          <button id="spaceResetBtn" type="button">归位（前视图）</button>
+          <button id="spaceTopViewBtn" type="button">俯视图</button>
+        </div>
+        <div class="space-control-row space-side-row">
+          <button id="spaceSideViewBtn" type="button">侧视图（CV中心）</button>
+          <button id="spaceSideGroundBtn" type="button">侧视图（O中心）</button>
+        </div>
+        <div class="space-control-row">
+          <button id="spaceLabelToggleBtn" type="button">隐藏标注</button>
+          <button id="spaceAuxToggleBtn" type="button">隐藏辅助线</button>
+          <button id="spaceExampleToggleBtn" type="button">显示实物示例</button>
+        </div>
+        <div class="space-control-row space-fov-row">
+          <label><span id="spaceMatchedFovValue">显示FOV --°</span><input id="spaceMatchedFovSlider" type="range" min="10" max="150" value="90" step="1" disabled></label>
+          <button id="spaceFovResetBtn" type="button" disabled>归位</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="panel front-panel">
+    <div class="panel-title">二维画面</div>
+    <svg id="front2d" viewBox="-80 -260 860 1040" role="img" aria-label="三点透视二维画面"></svg>
+    <div class="panel-bottom">
+      <div id="symbolInfo" class="symbol-info"></div>
+      <div class="front-controls">
+        <div class="control-group front-main-row">
+          <button id="frontResetBtn" type="button">归位</button>
+          <button id="frontPConeToggle" type="button">显示视锥</button>
+          <button id="frontCvRangeToggle" type="button">显示CV范围</button>
+        </div>
+        <div class="control-group toggle-controls">
+          <button id="frontLabelToggleBtn" type="button">隐藏标注</button>
+          <button id="frontAuxToggleBtn" type="button">隐藏辅助线</button>
+          <button id="frontExampleToggleBtn" type="button">显示实物示例</button>
+        </div>
+        <div class="display-mode-controls">
+          <button class="display-mode-btn" data-stage="1" type="button">①视点与视距</button>
+          <button class="display-mode-btn" data-stage="2" type="button">②灭点</button>
+          <button class="display-mode-btn" data-stage="3" type="button">③布局</button>
+          <button class="display-mode-btn" data-stage="4" type="button">④透视</button>
+        </div>
+        <div class="fov-controls">
+          <div class="front-slider-row">
+            <button class="front-step-btn" data-target="frontFovSlider" data-delta="-1" type="button">−</button>
+            <label><span id="frontFovValue">FOV 60°</span><input id="frontFovSlider" type="range" min="1" max="180" value="60" step="1"></label>
+            <button class="front-step-btn" data-target="frontFovSlider" data-delta="1" type="button">＋</button>
+          </div>
+          <div class="front-slider-row">
+            <button class="front-step-btn" data-target="frontThetaSlider" data-delta="-1" type="button">−</button>
+            <label><span id="frontThetaValue">θ 35°</span><input id="frontThetaSlider" type="range" min="-89" max="89" value="35" step="1"></label>
+            <button class="front-step-btn" data-target="frontThetaSlider" data-delta="1" type="button">＋</button>
+          </div>
+          <div class="front-slider-row">
+            <button class="front-step-btn" data-target="frontHorizonRotateSlider" data-delta="-1" type="button">−</button>
+            <label><span id="frontHorizonRotateValue">地平线旋转 0°</span><input id="frontHorizonRotateSlider" type="range" min="-180" max="180" value="0" step="1"></label>
+            <button class="front-step-btn" data-target="frontHorizonRotateSlider" data-delta="1" type="button">＋</button>
+          </div>
+          <div class="front-slider-row">
+            <button class="front-step-btn" data-target="frontHeightSlider" data-delta="-1" type="button">−</button>
+            <label><span id="frontHeightValue">高度 0.0</span><input id="frontHeightSlider" type="range" min="0" max="5" value="0" step="0.1"></label>
+            <button class="front-step-btn" data-target="frontHeightSlider" data-delta="1" type="button">＋</button>
+          </div>
+          <div class="front-slider-row">
+            <button class="front-step-btn" data-target="frontRoofDeltaSlider" data-delta="-1" type="button">−</button>
+            <label><span id="frontRoofDeltaValue">屋顶δ 30°</span><input id="frontRoofDeltaSlider" type="range" min="1" max="80" value="30" step="1"></label>
+            <button class="front-step-btn" data-target="frontRoofDeltaSlider" data-delta="1" type="button">＋</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+  (() => {
+    if (window.THREE && window.THREE.OrbitControls) return;
+
+    class Vector2 {
+      constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+      }
+      set(x, y) {
+        this.x = x;
+        this.y = y;
+        return this;
+      }
+    }
+
+    class Vector3 {
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
+      set(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+      }
+      copy(v) {
+        this.x = v.x;
+        this.y = v.y;
+        this.z = v.z;
+        return this;
+      }
+      clone() {
+        return new Vector3(this.x, this.y, this.z);
+      }
+      add(v) {
+        this.x += v.x;
+        this.y += v.y;
+        this.z += v.z;
+        return this;
+      }
+      sub(v) {
+        this.x -= v.x;
+        this.y -= v.y;
+        this.z -= v.z;
+        return this;
+      }
+      subVectors(a, b) {
+        this.x = a.x - b.x;
+        this.y = a.y - b.y;
+        this.z = a.z - b.z;
+        return this;
+      }
+      addVectors(a, b) {
+        this.x = a.x + b.x;
+        this.y = a.y + b.y;
+        this.z = a.z + b.z;
+        return this;
+      }
+      addScaledVector(v, s) {
+        this.x += v.x * s;
+        this.y += v.y * s;
+        this.z += v.z * s;
+        return this;
+      }
+      multiplyScalar(s) {
+        this.x *= s;
+        this.y *= s;
+        this.z *= s;
+        return this;
+      }
+      dot(v) {
+        return this.x * v.x + this.y * v.y + this.z * v.z;
+      }
+      crossVectors(a, b) {
+        const x = a.y * b.z - a.z * b.y;
+        const y = a.z * b.x - a.x * b.z;
+        const z = a.x * b.y - a.y * b.x;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+      }
+      lengthSq() {
+        return this.x * this.x + this.y * this.y + this.z * this.z;
+      }
+      length() {
+        return Math.sqrt(this.lengthSq());
+      }
+      normalize() {
+        const n = this.length();
+        if (n > 1e-12) this.multiplyScalar(1 / n);
+        return this;
+      }
+      distanceTo(v) {
+        return Math.sqrt((this.x - v.x) ** 2 + (this.y - v.y) ** 2 + (this.z - v.z) ** 2);
+      }
+      lerp(v, a) {
+        this.x += (v.x - this.x) * a;
+        this.y += (v.y - this.y) * a;
+        this.z += (v.z - this.z) * a;
+        return this;
+      }
+      applyAxisAngle(axis, angle) {
+        const k = axis.clone().normalize();
+        const v = this.clone();
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const cross = new Vector3().crossVectors(k, v);
+        this.copy(v.multiplyScalar(cos).add(cross.multiplyScalar(sin)).add(k.multiplyScalar(k.dot(this) * (1 - cos))));
+        return this;
+      }
+      project(camera) {
+        return camera.projectVector(this);
+      }
+    }
+
+    class Object3D {
+      constructor() {
+        this.children = [];
+        this.parent = null;
+        this.position = new Vector3();
+        this.userData = {};
+        this.renderOrder = 0;
+      }
+      add(child) {
+        child.parent = this;
+        this.children.push(child);
+        return this;
+      }
+      remove(child) {
+        const index = this.children.indexOf(child);
+        if (index >= 0) {
+          this.children.splice(index, 1);
+          child.parent = null;
+        }
+        return this;
+      }
+    }
+
+    class Scene extends Object3D {}
+    class Group extends Object3D {}
+
+    class Camera extends Object3D {
+      constructor() {
+        super();
+        this.up = new Vector3(0, 0, -1);
+        this.target = new Vector3();
+        this.quaternion = { copy: () => this.quaternion };
+        this.near = 1;
+        this.far = 80000;
+      }
+      lookAt(target) {
+        this.target.copy(target);
+        return this;
+      }
+      updateProjectionMatrix() {}
+      updateMatrixWorld() {}
+      basis() {
+        const forward = new Vector3().subVectors(this.target, this.position);
+        if (forward.lengthSq() < 1e-12) forward.set(0, -1, 0);
+        forward.normalize();
+        let right = new Vector3().crossVectors(forward, this.up);
+        if (right.lengthSq() < 1e-12) right.set(1, 0, 0);
+        right.normalize();
+        let up = new Vector3().crossVectors(right, forward);
+        if (up.lengthSq() < 1e-12) up.copy(this.up);
+        up.normalize();
+        return { forward, right, up };
+      }
+      cameraCoords(v) {
+        const rel = new Vector3().subVectors(v, this.position);
+        const basis = this.basis();
+        return {
+          x: rel.dot(basis.right),
+          y: rel.dot(basis.up),
+          z: rel.dot(basis.forward)
+        };
+      }
+      projectVector(v) {
+        const c = this.cameraCoords(v);
+        if (this.isOrthographicCamera) {
+          const halfW = Math.max(1e-6, (this.right - this.left) / 2);
+          const halfH = Math.max(1e-6, (this.top - this.bottom) / 2);
+          return new Vector3(c.x / halfW, c.y / halfH, 0);
+        }
+        const fov = Math.max(1, Math.min(179, this.fov || 60)) * Math.PI / 180;
+        const z = Math.max(1e-6, c.z);
+        const halfH = Math.tan(fov / 2) * z;
+        const halfW = halfH * (this.aspect || 1);
+        return new Vector3(c.x / Math.max(1e-6, halfW), c.y / Math.max(1e-6, halfH), c.z > 0 ? 0 : 2);
+      }
+    }
+
+    class PerspectiveCamera extends Camera {
+      constructor(fov, aspect, near, far) {
+        super();
+        this.fov = fov;
+        this.aspect = aspect;
+        this.near = near;
+        this.far = far;
+        this.isPerspectiveCamera = true;
+      }
+    }
+
+    class OrthographicCamera extends Camera {
+      constructor(left, right, top, bottom, near, far) {
+        super();
+        this.left = left;
+        this.right = right;
+        this.top = top;
+        this.bottom = bottom;
+        this.near = near;
+        this.far = far;
+        this.isOrthographicCamera = true;
+      }
+    }
+
+    class Float32BufferAttribute {
+      constructor(array, itemSize) {
+        this.array = Array.from(array);
+        this.itemSize = itemSize;
+      }
+    }
+
+    class BufferGeometry {
+      constructor() {
+        this.attributes = {};
+        this.index = null;
+        this.points = null;
+      }
+      setFromPoints(points) {
+        this.points = points.map(p => p.clone());
+        this.setAttribute('position', new Float32BufferAttribute(points.flatMap(p => [p.x, p.y, p.z]), 3));
+        return this;
+      }
+      setAttribute(name, attr) {
+        this.attributes[name] = attr;
+        return this;
+      }
+      setIndex(index) {
+        this.index = Array.from(index);
+        return this;
+      }
+      computeVertexNormals() {}
+      dispose() {}
+      positions() {
+        const attr = this.attributes.position;
+        if (!attr) return [];
+        const pts = [];
+        for (let i = 0; i < attr.array.length; i += attr.itemSize) {
+          pts.push(new Vector3(attr.array[i], attr.array[i + 1], attr.array[i + 2] || 0));
+        }
+        return pts;
+      }
+    }
+
+    class SphereGeometry {
+      constructor(radius) {
+        this.radius = radius;
+        this.isSphereGeometry = true;
+      }
+      dispose() {}
+    }
+
+    class Material {
+      constructor(options = {}) {
+        Object.assign(this, options);
+        this.color = options.color == null ? 0x20262d : options.color;
+        this.opacity = options.opacity == null ? 1 : options.opacity;
+        this.linewidth = options.linewidth || 1;
+      }
+      dispose() {}
+    }
+
+    class MeshBasicMaterial extends Material {}
+    class LineBasicMaterial extends Material {}
+
+    class Mesh extends Object3D {
+      constructor(geometry, material) {
+        super();
+        this.geometry = geometry;
+        this.material = material;
+      }
+    }
+
+    class Line extends Object3D {
+      constructor(geometry, material) {
+        super();
+        this.geometry = geometry;
+        this.material = material;
+      }
+    }
+
+    class CanvasTexture {
+      constructor(canvas) {
+        this.image = canvas;
+        this.needsUpdate = false;
+      }
+      dispose() {}
+    }
+
+    function colorStyle(value) {
+      if (typeof value === 'string') return value;
+      return `#${(value >>> 0).toString(16).padStart(6, '0').slice(-6)}`;
+    }
+
+    function collectObjects(objects, recursive, out = []) {
+      for (const object of objects) {
+        out.push(object);
+        if (recursive && object.children) collectObjects(object.children, true, out);
+      }
+      return out;
+    }
+
+    class Raycaster {
+      constructor() {
+        this.params = { Line: { threshold: 7 } };
+        this.pointer = new Vector2();
+        this.camera = null;
+      }
+      setFromCamera(pointer, camera) {
+        this.pointer.set(pointer.x, pointer.y);
+        this.camera = camera;
+      }
+      intersectObjects(objects, recursive = false) {
+        if (!this.camera) return [];
+        const hits = [];
+        for (const object of collectObjects(objects, recursive)) {
+          if (object instanceof Mesh && object.geometry && object.geometry.isSphereGeometry) {
+            const p = object.position.clone().project(this.camera);
+            const d = Math.hypot(p.x - this.pointer.x, p.y - this.pointer.y);
+            if (d < 0.045) hits.push({ object, distance: d });
+          } else if (object instanceof Line && object.geometry) {
+            const pts = object.geometry.points || object.geometry.positions();
+            if (pts.length >= 2) {
+              let d = Infinity;
+              for (let i = 0; i < pts.length - 1; i++) {
+                const a = pts[i].clone().add(object.position).project(this.camera);
+                const b = pts[i + 1].clone().add(object.position).project(this.camera);
+                d = Math.min(d, pointSegmentDistance(this.pointer, a, b));
+              }
+              if (d < 0.025) hits.push({ object, distance: d });
+            }
+          }
+        }
+        return hits.sort((a, b) => a.distance - b.distance);
+      }
+    }
+
+    function pointSegmentDistance(p, a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = dx * dx + dy * dy;
+      const t = len < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len));
+      return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+    }
+
+    class WebGLRenderer {
+      constructor(options = {}) {
+        this.domElement = options.canvas;
+        this.canvas = options.canvas;
+        this.ctx = this.canvas.getContext('2d');
+        this.clearColor = '#ffffff';
+      }
+      setClearColor(color) {
+        this.clearColor = colorStyle(color);
+      }
+      setPixelRatio() {}
+      setSize(width, height) {
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        this.canvas.width = Math.max(1, Math.floor(width * ratio));
+        this.canvas.height = Math.max(1, Math.floor(height * ratio));
+        this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+      render(scene, camera) {
+        const rect = this.canvas.getBoundingClientRect();
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.fillStyle = this.clearColor;
+        ctx.fillRect(0, 0, rect.width, rect.height);
+        for (const object of collectObjects(scene.children, true)) {
+          if (object instanceof Mesh) this.drawMesh(ctx, rect, object, camera);
+          if (object instanceof Line) this.drawLine(ctx, rect, object, camera);
+        }
+        ctx.restore();
+      }
+      screenPoint(point, rect, camera) {
+        const p = point.clone().project(camera);
+        return {
+          x: (p.x * 0.5 + 0.5) * rect.width,
+          y: (-p.y * 0.5 + 0.5) * rect.height,
+          visible: p.z > -1 && p.z < 1
+        };
+      }
+      drawLine(ctx, rect, object, camera) {
+        const pts = object.geometry.points || object.geometry.positions();
+        if (pts.length < 2) return;
+        ctx.save();
+        ctx.globalAlpha = object.material.opacity == null ? 1 : object.material.opacity;
+        ctx.strokeStyle = colorStyle(object.material.color);
+        ctx.lineWidth = Math.max(1, object.material.linewidth || 1);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        pts.forEach((pt, i) => {
+          const p = this.screenPoint(pt.clone().add(object.position), rect, camera);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.stroke();
+        ctx.restore();
+      }
+      drawMesh(ctx, rect, object, camera) {
+        const material = object.material || {};
+        if (object.geometry && object.geometry.isSphereGeometry) {
+          if (object.geometry.radius > 1000) return;
+          const p = this.screenPoint(object.position, rect, camera);
+          ctx.save();
+          ctx.globalAlpha = material.opacity == null ? 1 : material.opacity;
+          ctx.fillStyle = colorStyle(material.color);
+          ctx.strokeStyle = colorStyle(material.color);
+          const r = Math.max(2, Math.min(18, object.geometry.radius * 1.8));
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          material.wireframe ? ctx.stroke() : ctx.fill();
+          ctx.restore();
+          return;
+        }
+        const pts = object.geometry.positions().map(p => p.add(object.position));
+        if (pts.length < 3) return;
+        const index = object.geometry.index || pts.map((_, i) => i);
+        ctx.save();
+        ctx.globalAlpha = material.opacity == null ? 1 : material.opacity;
+        ctx.fillStyle = material.map ? 'rgba(32,38,45,0.22)' : colorStyle(material.color);
+        ctx.strokeStyle = colorStyle(material.color || 0x20262d);
+        for (let i = 0; i < index.length; i += 3) {
+          const tri = [pts[index[i]], pts[index[i + 1]], pts[index[i + 2]]].map(p => this.screenPoint(p, rect, camera));
+          ctx.beginPath();
+          ctx.moveTo(tri[0].x, tri[0].y);
+          ctx.lineTo(tri[1].x, tri[1].y);
+          ctx.lineTo(tri[2].x, tri[2].y);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    class OrbitControls {
+      constructor(object, domElement) {
+        this.object = object;
+        this.domElement = domElement;
+        this.target = new Vector3();
+        this.enableDamping = false;
+        this.dampingFactor = 0;
+      }
+      addEventListener() {}
+      update() {
+        this.object.lookAt(this.target);
+      }
+    }
+
+    window.THREE = Object.assign(window.THREE || {}, {
+      Vector2,
+      Vector3,
+      Scene,
+      Group,
+      PerspectiveCamera,
+      OrthographicCamera,
+      WebGLRenderer,
+      Raycaster,
+      BufferGeometry,
+      Float32BufferAttribute,
+      SphereGeometry,
+      MeshBasicMaterial,
+      LineBasicMaterial,
+      Mesh,
+      Line,
+      CanvasTexture,
+      OrbitControls,
+      DoubleSide: 2,
+      BackSide: 1
+    });
+  })();
+</script>
+<script>
+  const SVG_COLORS = {
+    black: '#20262d',
+    blue: '#10aeea',
+    green: '#4b8f6b',
+    gray: '#a8aeb5',
+    half: '#8b5cf6',
+    horizon: '#9aa5ae',
+    orange: '#f97316',
+    plane: '#f4f6f8',
+    planeEdge: '#b9c2cb',
+    pink: '#ff8fbe',
+    purple: '#8b5cf6',
+    yellow: '#f2bf22'
+  };
+
+  const CUBE_EDGES = [
+    ['a', 'b'], ['b', 'd'], ['d', 'c'], ['c', 'a'],
+    ['A', 'B'], ['B', 'D'], ['D', 'C'], ['C', 'A'],
+    ['a', 'A'], ['b', 'B'], ['c', 'C'], ['d', 'D']
+  ];
+  const CUBE_FACES = [
+    ['a', 'c', 'd', 'b'],
+    ['A', 'B', 'D', 'C'],
+    ['a', 'b', 'B', 'A'],
+    ['a', 'A', 'C', 'c'],
+    ['b', 'd', 'D', 'B'],
+    ['c', 'C', 'D', 'd']
+  ];
+  const MIN_P_CV_DISTANCE = 48;
+  // a 点必须始终留在 VP1-VP2 地平线的同一侧；避免越线后几何半平面翻转导致构型崩坏。
+  const MIN_A_HORIZON_DISTANCE = 8;
+  const SYMBOL_INFO = {
+    CV: ['视觉中心', 'Center of Vision', '画面上的视线中心，位于视平线上。'],
+    P: ['观察点/目点', 'Point of View / Station Point', '观察者所在的位置。'],
+    'P⁰': ['观察点/目点', 'Point of View / Station Point', '三维空间中的真实观察点。'],
+    VP1: ['第一消失点', 'Vanishing Point 1', '左侧水平方向在视平线上的消失点。'],
+    VP2: ['第二消失点', 'Vanishing Point 2', '右侧水平方向在视平线上的消失点。'],
+    VP3: ['第三消失点', 'Vanishing Point 3', '竖向平行线的消失点；俯视时通常落在画面下方。'],
+    O: ['地面中心', 'Ground Center', '位于过 CV 的垂线上，新的地平线通过 O。'],
+    P1: ['观察点/目点（转换得到）', 'Converted Point of View / Station Point', '由三点透视构图关系转换得到的观察点。'],
+    P2: ['观察点/目点（转换得到）', 'Converted Point of View / Station Point', '由三点透视构图关系转换得到的观察点；可上下拖拽，用来等比缩放 VP1-VP2 决定的圆。'],
+    "VP1'": ['第一地平消失脚点', 'VP1 Ground-Horizon Foot', 'VP1 到过 O 的地平线的垂足。'],
+    "VP2'": ['第二地平消失脚点', 'VP2 Ground-Horizon Foot', 'VP2 到过 O 的地平线的垂足。'],
+    'Pθ': ['三点透视观察点', 'Three-Point Viewpoint', '位于过 CV 的水平线上，并落在 O-VP3 为直径的圆上。'],
+    'P(Q1)': ['右半角消失点', 'Right Half-Angle Vanishing Point', '由观察点与右消失点关系确定的半角消失点。'],
+    'P(Q2)': ['左半角消失点', 'Left Half-Angle Vanishing Point', '由观察点与左消失点关系确定的半角消失点。'],
+    S2: ['右垂直消失辅助点', 'Right Vertical Vanishing Auxiliary Point', '用于 Q2 侧辅助方向的隐藏计算点。'],
+    S: ['左量距点', 'Left Measuring Point', '由 Q1-B 延长线与过 A 的水平线相交得到。'],
+    T: ['右量距点', 'Right Measuring Point', '过 A 水平量取 AT=SA 得到，用来连接 Q2。'],
+    Y: ['竖向量距点', 'Vertical Measuring Point', '由 VP3-P1 绕 VP3 旋到水平位置得到，满足 VP3P1 = VP3Y。'],
+    a: ['基准线下角点', 'Lower Corner Point of the Reference Line', '几何体基准竖线的下端点。'],
+    A: ['基准线上角点', 'Upper Corner Point of the Reference Line', '几何体基准竖线的上端点，可上下拖拽缩放几何体。'],
+    "A''": ['右等距基准点', 'Right Equal-Distance Reference Point', '从 a 向右量取基准长度得到的点。'],
+    b: ['左后下角点', 'Left Receding Lower Point', '左向深度方向生成的下角点。'],
+    c: ['右后下角点', 'Right Receding Lower Point', '右向深度方向生成的下角点。'],
+    d: ['后下交点', 'Rear Lower Intersection Point', '两组透视方向在后下方形成的交点。'],
+    B: ['左后上角点', 'Left Receding Upper Point', 'b 点对应的上方透视点。'],
+    C: ['右后上角点', 'Right Receding Upper Point', 'c 点对应的上方透视点。'],
+    D: ['后上交点', 'Rear Upper Intersection Point', '后上方透视交点，可拖拽旋转几何体。'],
+    alpha: ['α：左侧视角 / 右侧布局角', 'Alpha Angle', '表示水平构图中 CV-P1-VP1 对应的角。'],
+    beta: ['β：右侧视角 / 左侧布局角', 'Beta Angle', '表示水平构图中 CV-P1-VP2 对应的角。'],
+    theta: ['俯仰角', 'Pitch Angle', 'O-P⁰-CV 形成的视线俯仰角。'],
+    delta: ['δ：屋顶倾角', 'Delta Angle', '表示屋顶斜面相对主体边的倾角。'],
+    '视线': ['视线', 'Line of Sight', 'P⁰ 与 CV 连成的观察方向线。'],
+    FOV: ['视场角', 'Field of View', '观察点视锥的开角。']
+  };
+
+  const DEFAULT_FRONT2D_STATE = {
+    cvX: 350,
+    pY: 520,
+    p2Distance: null,
+    vprAngleDeg: 35,
+    aX: 320,
+    aY: 385,
+    horizonY: 260,
+    cubeSize: 80,
+    cubeTrueSize: null,
+    fovDeg: 60,
+    thetaDeg: 35,
+    horizonRotateDeg: 0,
+    roofDeltaDeg: 30,
+    heightUnits: 0,
+    showLabels: true,
+    showAux: true,
+    showPCone: false,
+    showCvRange: false,
+    showExamples: false,
+    displayStage: 4
+  };
+  const FRONT2D_STATE = { ...DEFAULT_FRONT2D_STATE };
+  const SPACE3D_STATE = {
+    showLabels: true,
+    showAux: true,
+    showExamples: false,
+    matchedFovDeg: 90,
+    displayFovDeg: 90,
+    forcedFovDeg: null,
+    viewMode: 'front',
+    projectionMode: 'perspective'
+  };
+  const SPACE3D_LABELS = ['VP1', 'VP2', 'VP3', 'O', 'P2', 'P(Q2)', 'P(Q1)', 'CV', 'P1'];
+  const SPACE3D_POINT_RADIUS = 3.2;
+  let space3d = null;
+  let space3dLabels = [];
+  let space3dCentered = false;
+  let lastSpace3dPayload = null;
+  let space3dSelection = null;
+  let lastFront2dPayload = null;
+
+  function sharedSymbolKey(symbol) {
+    if (symbol === 'VPL') return 'VP1';
+    if (symbol === 'VPR') return 'VP2';
+    if (symbol === 'P0' || symbol === 'p0') return 'P⁰';
+    if (symbol === 'α') return 'alpha';
+    if (symbol === 'β') return 'beta';
+    if (symbol === 'θ') return 'theta';
+    if (symbol === 'δ') return 'delta';
+    return symbol;
+  }
+
+  function displaySymbol(symbol) {
+    if (symbol === 'VPL') return 'VP1';
+    if (symbol === 'VPR') return 'VP2';
+    return symbol;
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
+  }
+
+  function symbolInfoHtml(symbol) {
+    const info = SYMBOL_INFO[sharedSymbolKey(symbol)];
+    const safeSymbol = escapeHtml(displaySymbol(symbol));
+    if (!info) return `<strong>${safeSymbol}</strong>`;
+    return `<strong>${safeSymbol}</strong>：${escapeHtml(info[0])}<br>${escapeHtml(info[1])}<br>${escapeHtml(info[2])}`;
+  }
+
+  setupFrontControls();
+  setupSpace3dControls();
+  drawFront2d();
+  initSpace3dSafely();
+  window.addEventListener('resize', () => {
+    resizeSpace3d();
+    if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+  });
+
+  function initSpace3dSafely() {
+    if (!document.getElementById('space3d')) return;
+    if (!window.THREE || !THREE.OrbitControls) {
+      showSpace3dMessage('三维空间加载失败');
+      return;
+    }
+    try {
+      initSpace3d();
+      if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+    } catch (error) {
+      console.error(error);
+      showSpace3dMessage('三维空间初始化失败');
+    }
+  }
+
+  function showSpace3dMessage(message) {
+    const layer = document.getElementById('space3dLabels');
+    if (!layer) return;
+    layer.innerHTML = `<div class="space-message">${message}</div>`;
+  }
+
+  function setupSpace3dControls() {
+    const resetBtn = document.getElementById('spaceResetBtn');
+    const topViewBtn = document.getElementById('spaceTopViewBtn');
+    const sideViewBtn = document.getElementById('spaceSideViewBtn');
+    const sideGroundBtn = document.getElementById('spaceSideGroundBtn');
+    const labelBtn = document.getElementById('spaceLabelToggleBtn');
+    const auxBtn = document.getElementById('spaceAuxToggleBtn');
+    const exampleBtn = document.getElementById('spaceExampleToggleBtn');
+    const projectionBtn = document.getElementById('spaceProjectionToggleBtn');
+    const fovSlider = document.getElementById('spaceMatchedFovSlider');
+    const fovResetBtn = document.getElementById('spaceFovResetBtn');
+    if (!resetBtn || !topViewBtn || !sideViewBtn || !sideGroundBtn || !labelBtn || !auxBtn || !exampleBtn || !projectionBtn || !fovSlider || !fovResetBtn) return;
+
+    resetBtn.addEventListener('click', () => {
+      SPACE3D_STATE.viewMode = 'front';
+      resetSpace3dView();
+    });
+    topViewBtn.addEventListener('click', () => {
+      SPACE3D_STATE.viewMode = 'top';
+      resetSpace3dView();
+    });
+    sideViewBtn.addEventListener('click', () => {
+      SPACE3D_STATE.viewMode = 'sideFrame';
+      resetSpace3dView();
+    });
+    sideGroundBtn.addEventListener('click', () => {
+      SPACE3D_STATE.viewMode = 'sideGround';
+      resetSpace3dView();
+    });
+    labelBtn.addEventListener('click', () => {
+      SPACE3D_STATE.showLabels = !SPACE3D_STATE.showLabels;
+      syncSpace3dControls();
+      if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+    });
+    auxBtn.addEventListener('click', () => {
+      SPACE3D_STATE.showAux = !SPACE3D_STATE.showAux;
+      syncSpace3dControls();
+      if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+    });
+    exampleBtn.addEventListener('click', () => {
+      SPACE3D_STATE.showExamples = !SPACE3D_STATE.showExamples;
+      syncSpace3dControls();
+      if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+    });
+    projectionBtn.addEventListener('click', () => {
+      SPACE3D_STATE.projectionMode = SPACE3D_STATE.projectionMode === 'perspective' ? 'orthographic' : 'perspective';
+      syncSpace3dActiveCamera();
+      syncSpace3dCameraProjection();
+      syncSpace3dControls();
+      renderSpace3dNow();
+      updateSpace3dLabels();
+    });
+    // 三维显示FOV只作为当前画面匹配结果显示，不再允许手动调节。
+    fovSlider.disabled = true;
+    fovResetBtn.disabled = true;
+    SPACE3D_STATE.forcedFovDeg = null;
+    syncSpace3dControls();
+  }
+
+  function syncSpace3dControls() {
+    const resetBtn = document.getElementById('spaceResetBtn');
+    const topViewBtn = document.getElementById('spaceTopViewBtn');
+    const sideViewBtn = document.getElementById('spaceSideViewBtn');
+    const sideGroundBtn = document.getElementById('spaceSideGroundBtn');
+    const labelBtn = document.getElementById('spaceLabelToggleBtn');
+    const auxBtn = document.getElementById('spaceAuxToggleBtn');
+    const exampleBtn = document.getElementById('spaceExampleToggleBtn');
+    const projectionBtn = document.getElementById('spaceProjectionToggleBtn');
+    const fovValue = document.getElementById('spaceMatchedFovValue');
+    const fovSlider = document.getElementById('spaceMatchedFovSlider');
+    if (resetBtn) resetBtn.textContent = '归位（前视图）';
+    if (sideViewBtn) sideViewBtn.textContent = '侧视图（CV中心）';
+    if (sideGroundBtn) sideGroundBtn.textContent = '侧视图（O中心）';
+    if (labelBtn) labelBtn.textContent = SPACE3D_STATE.showLabels ? '隐藏标注' : '显示标注';
+    if (auxBtn) auxBtn.textContent = SPACE3D_STATE.showAux ? '隐藏辅助线' : '显示辅助线';
+    if (exampleBtn) exampleBtn.textContent = SPACE3D_STATE.showExamples ? '隐藏实物示例' : '显示实物示例';
+    if (projectionBtn) {
+      const isOrthographic = SPACE3D_STATE.projectionMode === 'orthographic';
+      projectionBtn.textContent = isOrthographic ? '平行投影' : '透视投影';
+      projectionBtn.classList.toggle('is-active', isOrthographic);
+      projectionBtn.setAttribute('aria-pressed', isOrthographic ? 'true' : 'false');
+    }
+    [
+      [resetBtn, 'front'],
+      [topViewBtn, 'top'],
+      [sideViewBtn, 'sideFrame'],
+      [sideGroundBtn, 'sideGround']
+    ].forEach(([btn, mode]) => {
+      if (!btn) return;
+      const active = SPACE3D_STATE.viewMode === mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (fovValue) {
+      const prefix = SPACE3D_STATE.projectionMode === 'orthographic' ? '平行投影视域' : '显示FOV';
+      fovValue.textContent = `${prefix} ${Math.round(SPACE3D_STATE.displayFovDeg)}°`;
+    }
+    if (fovSlider) {
+      fovSlider.value = SPACE3D_STATE.displayFovDeg;
+      fovSlider.disabled = true;
+      fovSlider.setAttribute('aria-disabled', 'true');
+    }
+    const fovResetBtn = document.getElementById('spaceFovResetBtn');
+    if (fovResetBtn) {
+      fovResetBtn.disabled = true;
+      fovResetBtn.setAttribute('aria-disabled', 'true');
+    }
+  }
+
+  function applySpace3dFov(fovDeg) {
+    const nextFov = Math.max(10, Math.min(150, Number(fovDeg) || SPACE3D_STATE.matchedFovDeg || 90));
+    SPACE3D_STATE.displayFovDeg = nextFov;
+    if (!space3d) return;
+    syncSpace3dCameraProjection();
+    renderSpace3dNow();
+    updateSpace3dLabels();
+  }
+
+  function resetSpace3dView() {
+    space3dCentered = false;
+    if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+  }
+
+  function renderSpace3dNow() {
+    if (!space3d) return;
+    space3d.renderer.render(space3d.scene, space3d.camera);
+  }
+
+  function syncSpace3dActiveCamera() {
+    if (!space3d) return null;
+    const nextCamera = SPACE3D_STATE.projectionMode === 'orthographic'
+      ? space3d.orthographicCamera
+      : space3d.perspectiveCamera;
+    if (space3d.camera !== nextCamera) {
+      nextCamera.position.copy(space3d.camera.position);
+      nextCamera.up.copy(space3d.camera.up);
+      nextCamera.quaternion.copy(space3d.camera.quaternion);
+      space3d.camera = nextCamera;
+      space3d.controls.object = nextCamera;
+      nextCamera.updateMatrixWorld(true);
+    }
+    return nextCamera;
+  }
+
+  function syncSpace3dCameraProjection() {
+    if (!space3d) return;
+    const rect = space3d.canvas.getBoundingClientRect();
+    const aspect = Math.max(1e-6, rect.width / Math.max(1, rect.height));
+    const fovDeg = Math.max(10, Math.min(150, SPACE3D_STATE.displayFovDeg || SPACE3D_STATE.matchedFovDeg || 90));
+
+    space3d.perspectiveCamera.aspect = aspect;
+    space3d.perspectiveCamera.fov = fovDeg;
+    space3d.perspectiveCamera.near = 1;
+    space3d.perspectiveCamera.far = 80000;
+    space3d.perspectiveCamera.updateProjectionMatrix();
+
+    const target = space3d.controls ? space3d.controls.target : new THREE.Vector3();
+    let distance = space3d.camera ? space3d.camera.position.distanceTo(target) : 940;
+    if (!Number.isFinite(distance) || distance < 1) distance = 940;
+    const viewHeight = Math.max(10, 2 * distance * Math.tan(fovDeg * Math.PI / 360));
+    const viewWidth = viewHeight * aspect;
+    const ortho = space3d.orthographicCamera;
+    ortho.left = -viewWidth / 2;
+    ortho.right = viewWidth / 2;
+    ortho.top = viewHeight / 2;
+    ortho.bottom = -viewHeight / 2;
+    ortho.near = 1;
+    ortho.far = 80000;
+    ortho.updateProjectionMatrix();
+  }
+
+  function initSpace3d() {
+    const canvas = document.getElementById('space3d');
+    const labelLayer = document.getElementById('space3dLabels');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setClearColor(0xffffff, 1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    const scene = new THREE.Scene();
+    const perspectiveCamera = new THREE.PerspectiveCamera(90, 1, 1, 80000);
+    perspectiveCamera.position.set(0, 1000, 140);
+    perspectiveCamera.up.set(0, 0, -1);
+
+    const orthographicCamera = new THREE.OrthographicCamera(-470, 470, 470, -470, 1, 80000);
+    orthographicCamera.position.copy(perspectiveCamera.position);
+    orthographicCamera.up.copy(perspectiveCamera.up);
+    orthographicCamera.lookAt(new THREE.Vector3(0, 0, 140));
+
+    const camera = SPACE3D_STATE.projectionMode === 'orthographic' ? orthographicCamera : perspectiveCamera;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, 140);
+    controls.addEventListener('change', () => {
+      syncSpace3dCameraProjection();
+      renderSpace3dNow();
+      updateSpace3dLabels();
+    });
+
+    const dynamicGroup = new THREE.Group();
+    scene.add(dynamicGroup);
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Line.threshold = 7;
+    const pointer = new THREE.Vector2();
+    let pickStart = null;
+    canvas.addEventListener('pointerdown', (event) => {
+      pickStart = { x: event.clientX, y: event.clientY };
+    });
+    canvas.addEventListener('pointerup', (event) => {
+      if (!pickStart) return;
+      const moved = Math.hypot(event.clientX - pickStart.x, event.clientY - pickStart.y);
+      pickStart = null;
+      if (moved <= 4) handleSpace3dPick(event);
+    });
+
+    space3d = {
+      canvas,
+      labelLayer,
+      renderer,
+      scene,
+      camera,
+      perspectiveCamera,
+      orthographicCamera,
+      controls,
+      dynamicGroup,
+      raycaster,
+      pointer
+    };
+    resizeSpace3d();
+    syncSpace3dActiveCamera();
+    syncSpace3dCameraProjection();
+
+    const animate = () => {
+      if (!space3d) return;
+      requestAnimationFrame(animate);
+      controls.update();
+      renderSpace3dNow();
+      updateSpace3dLabels();
+    };
+    animate();
+  }
+
+  function resizeSpace3d() {
+    if (!space3d) return;
+    const { canvas, renderer } = space3d;
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width));
+    const height = Math.max(1, Math.floor(rect.height));
+    renderer.setSize(width, height, false);
+    syncSpace3dCameraProjection();
+  }
+
+  function updateSpace3d(points) {
+    lastSpace3dPayload = points;
+    if (!space3d || !points || !points.roof) return;
+
+    syncSpace3dActiveCamera();
+    const { dynamicGroup, labelLayer, controls, renderer } = space3d;
+    const camera = space3d.camera;
+    while (dynamicGroup.children.length) {
+      disposeSpace3dObject(dynamicGroup.children[0]);
+      dynamicGroup.remove(dynamicGroup.children[0]);
+    }
+    labelLayer.innerHTML = '';
+    space3dLabels = [];
+
+    const spaceTransform = space3dTransformFromPoints(points);
+    const toSpace = (point) => mapToSpace3d(point, spaceTransform);
+    const mapped = {
+      VPL: toSpace(points.vpl),
+      VPR: toSpace(points.vpr),
+      VP1: toSpace(points.vpl),
+      VP2: toSpace(points.vpr),
+      VP3: toSpace(points.vp3 || points.third.vp3),
+      O: toSpace(points.o || points.third.o),
+      'P(Q2)': toSpace(points.q2),
+      'P(Q1)': toSpace(points.q1),
+      CV: toSpace(points.cv),
+      P1: toSpace(points.observer),
+      P: toSpace(points.observer),
+      PlanP: toSpace(points.planObserver || points.observer),
+      P2: toSpace(points.ground ? points.ground.p2 : points.observer),
+      "VP1'": toSpace(points.vpl),
+      "VP2'": toSpace(points.vpr),
+      "A'": toSpace(points.e),
+      "A''": toSpace(points.f),
+      S: toSpace(points.s || points.e),
+      T: toSpace(points.t || points.f),
+      Y: toSpace(points.y),
+      a: toSpace(points.a),
+      A: toSpace(points.A)
+    };
+
+    const p0 = space3dP0Point(mapped, spaceTransform);
+    const pictureFrame = space3dPictureFrame(mapped, p0);
+    const model = buildSpace3dModel(points, spaceTransform, mapped, p0, pictureFrame);
+    const matchedFov = space3dMatchedDisplayFov(mapped, p0, pictureFrame);
+    SPACE3D_STATE.matchedFovDeg = matchedFov;
+    SPACE3D_STATE.forcedFovDeg = null;
+    SPACE3D_STATE.displayFovDeg = matchedFov;
+    syncSpace3dCameraProjection();
+    syncSpace3dControls();
+
+    renderer.setClearColor(SPACE3D_STATE.showExamples ? 0xdff1ff : 0xffffff, 1);
+    if (SPACE3D_STATE.showExamples) addSpace3dWorldExample(dynamicGroup, model, mapped, p0);
+    addSpace3dModel(dynamicGroup, model);
+    if (SPACE3D_STATE.showAux) {
+      const viewLevelSegment = space3dPictureHorizontalSegment(pictureFrame, mapped.CV);
+      const viewHeightSegment = space3dPictureHorizontalSegment(pictureFrame, mapped.O);
+      addSpace3dFrame(dynamicGroup, pictureFrame, SVG_COLORS.gray, 1.5);
+      addSpace3dFace(dynamicGroup, pictureFrame.corners, '#ffffff', 0, '画面');
+      addSpace3dFace(dynamicGroup, [viewLevelSegment[0], viewLevelSegment[1], p0], '#dff3eb', 0.26, '视平面');
+      addSpace3dFace(dynamicGroup, [viewHeightSegment[0], viewHeightSegment[1], p0], '#e8eef8', 0.22, '视高面');
+      addSpace3dInfiniteLine(dynamicGroup, mapped.CV, p0, '视线');
+      addSpace3dInfiniteLine(dynamicGroup, viewLevelSegment[0], viewLevelSegment[1], '视平线');
+      addSpace3dInfiniteLine(dynamicGroup, viewHeightSegment[0], viewHeightSegment[1], '地平线');
+      addSpace3dInfiniteGuideLine(dynamicGroup, mapped.CV, mapped.O);
+      addSpace3dLine(dynamicGroup, viewLevelSegment[0], viewLevelSegment[1], SVG_COLORS.green, 1.2);
+      addSpace3dLine(dynamicGroup, viewHeightSegment[0], viewHeightSegment[1], SVG_COLORS.black, 1.6);
+      addSpace3dLine(dynamicGroup, mapped.CV, mapped.P1, SVG_COLORS.green, 1.4);
+      addSpace3dLine(dynamicGroup, mapped.P1, mapped.O, SVG_COLORS.orange, 1.2);
+      addSpace3dLine(dynamicGroup, mapped.P1, mapped.VP3, SVG_COLORS.purple, 1.2);
+      addSpace3dLine(dynamicGroup, mapped.O, mapped.VP3, SVG_COLORS.gray, 1);
+      addSpace3dLine(dynamicGroup, mapped.CV, p0, SVG_COLORS.green, 1.8);
+      addSpace3dLine(dynamicGroup, mapped.O, p0, SVG_COLORS.orange, 1.2);
+      addSpace3dLine(dynamicGroup, mapped.PlanP, mapped.VPL, SVG_COLORS.blue, 1.2);
+      addSpace3dLine(dynamicGroup, mapped.PlanP, mapped.VPR, SVG_COLORS.yellow, 1.2);
+      addSpace3dLine(dynamicGroup, p0, mapped.VPL, SVG_COLORS.blue, 1.2);
+      addSpace3dLine(dynamicGroup, p0, mapped.VPR, SVG_COLORS.yellow, 1.2);
+      addSpace3dRay(dynamicGroup, model.vertices.a, new THREE.Vector3().subVectors(mapped.VP1, p0), SVG_COLORS.blue, 0.16, 0.36);
+      addSpace3dRay(dynamicGroup, model.vertices.a, new THREE.Vector3().subVectors(mapped.VP2, p0), SVG_COLORS.yellow, 0.16, 0.36);
+      addSpace3dVanishingOriginLabels(dynamicGroup, mapped, model, p0);
+      addSpace3dConstructionRays(dynamicGroup, mapped, model, p0);
+      if (mapped.Y && mapped.S && mapped.T) {
+        addSpace3dLine(dynamicGroup, mapped.VP3, mapped.Y, SVG_COLORS.green, 1.0);
+        addSpace3dLine(dynamicGroup, mapped.Y, mapped.S, SVG_COLORS.green, 1.0);
+        addSpace3dLine(dynamicGroup, mapped.A, mapped.S, SVG_COLORS.orange, 1.0);
+        addSpace3dLine(dynamicGroup, mapped.A, mapped.T, SVG_COLORS.orange, 1.0);
+        addSpace3dLine(dynamicGroup, mapped.S, mapped['P(Q1)'], SVG_COLORS.half, 1.0);
+        addSpace3dLine(dynamicGroup, mapped.T, mapped['P(Q2)'], SVG_COLORS.half, 1.0);
+        addSpace3dPoint(dynamicGroup, mapped.S, SVG_COLORS.orange, 'S');
+        addSpace3dPoint(dynamicGroup, mapped.T, SVG_COLORS.orange, 'T');
+        addSpace3dPoint(dynamicGroup, mapped.Y, SVG_COLORS.green, 'Y');
+        addSpace3dLabel('S', mapped.S, SVG_COLORS.orange);
+        addSpace3dLabel('T', mapped.T, SVG_COLORS.orange);
+        addSpace3dLabel('Y', mapped.Y, SVG_COLORS.green);
+        const stVector = new THREE.Vector3().subVectors(mapped.T, mapped.S);
+        if (stVector.lengthSq() > 1e-6) {
+          const halfSt = stVector.clone().multiplyScalar(0.5);
+          const sPrime = model.vertices.A.clone().sub(halfSt);
+          const tPrime = model.vertices.A.clone().add(halfSt);
+          addSpace3dLine(dynamicGroup, sPrime, tPrime, SVG_COLORS.orange, 1.2);
+          addSpace3dPoint(dynamicGroup, sPrime, SVG_COLORS.orange, 'S′');
+          addSpace3dPoint(dynamicGroup, tPrime, SVG_COLORS.orange, 'T′');
+          addSpace3dLabel('S′', sPrime, SVG_COLORS.orange);
+          addSpace3dLabel('T′', tPrime, SVG_COLORS.orange);
+          addSpace3dAngle(dynamicGroup, 'β', model.vertices.A, sPrime, model.vertices.B, SVG_COLORS.yellow, 24);
+          addSpace3dAngle(dynamicGroup, 'α', model.vertices.A, model.vertices.C, tPrime, SVG_COLORS.blue, 24);
+        }
+      }
+      addSpace3dAngle(dynamicGroup, 'θ', p0, mapped.O, mapped.CV, SVG_COLORS.green, 32, 'θ');
+    }
+
+    for (const name of SPACE3D_LABELS) {
+      const color = space3dColorFor(name);
+      addSpace3dPoint(dynamicGroup, mapped[name], color, name);
+      addSpace3dLabel(name, mapped[name], color);
+    }
+    addSpace3dPoint(dynamicGroup, p0, SVG_COLORS.green, 'P⁰');
+    addSpace3dLabel('P⁰', p0, SVG_COLORS.green);
+    if (SPACE3D_STATE.showExamples) addSpace3dExamplePeople(dynamicGroup, mapped, p0, points, spaceTransform, model);
+
+    if (!space3dCentered) {
+      applySpace3dView(camera, controls, pictureFrame, p0, mapped, SPACE3D_STATE.viewMode, model);
+      space3dCentered = true;
+    }
+    controls.update();
+    renderer.render(space3d.scene, camera);
+    updateSpace3dLabels();
+    showSpace3dSelectionInfo();
+  }
+
+  function space3dRotateVectorAroundAxis(vector, axis, angleRad) {
+    const v = vector.clone();
+    const k = axis.clone();
+    if (k.lengthSq() < 1e-9 || Math.abs(angleRad) < 1e-12) return v;
+    k.normalize();
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+    return v.multiplyScalar(cos)
+      .add(new THREE.Vector3().crossVectors(k, vector).multiplyScalar(sin))
+      .add(k.multiplyScalar(k.dot(vector) * (1 - cos)));
+  }
+
+  function space3dTransformFromPoints(points) {
+    const oPoint = points.o || (points.third && points.third.o) || { x: 350, y: 170 };
+    const thetaDeg = points.third && Number.isFinite(points.third.thetaDeg)
+      ? points.third.thetaDeg
+      : FRONT2D_STATE.thetaDeg;
+    const theta = thetaDeg * Math.PI / 180;
+    const rollDeg = Number.isFinite(points.horizonRotateDeg)
+      ? points.horizonRotateDeg
+      : (Number.isFinite(FRONT2D_STATE.horizonRotateDeg) ? FRONT2D_STATE.horizonRotateDeg : 0);
+    // SVG 坐标系 y 轴向下，正角度视觉上是顺时针；在 Three.js 右手系里要取反才能一致。
+    const roll = -rollDeg * Math.PI / 180;
+    const normal = new THREE.Vector3(0, Math.cos(theta), -Math.sin(theta)).normalize();
+    const baseAxisX = new THREE.Vector3(1, 0, 0);
+    const baseAxisY = new THREE.Vector3(0, Math.sin(theta), Math.cos(theta));
+    const axisX = space3dRotateVectorAroundAxis(baseAxisX, normal, roll).normalize();
+    const axisY = space3dRotateVectorAroundAxis(baseAxisY, normal, roll).normalize();
+    return {
+      pivot: new THREE.Vector3(oPoint.x - 350, 0, oPoint.y - 170),
+      origin2d: oPoint,
+      sin: Math.sin(theta),
+      cos: Math.cos(theta),
+      normal,
+      axisX,
+      axisY,
+      horizonRotateDeg: rollDeg
+    };
+  }
+
+  function mapToSpace3d(point, transform = null) {
+    const t = transform || space3dTransformFromPoints(lastFront2dPayload || {});
+    const dx = point.x - t.origin2d.x;
+    const dy = point.y - t.origin2d.y;
+    const axisX = t.axisX || new THREE.Vector3(1, 0, 0);
+    const axisY = t.axisY || new THREE.Vector3(0, t.sin || 0, t.cos || 1);
+    return t.pivot.clone()
+      .addScaledVector(axisX, dx)
+      .addScaledVector(axisY, dy);
+  }
+
+  function space3dP0Point(mapped, transform) {
+    // P⁰-CV 是视线，P⁰ 必须在画面中心 CV 的法线上。
+    // 视距不再靠 “P⁰.z = O.z” 这种固定水平假设，而是直接取二维构图中的 CV-P1 距离。
+    const base = mapped.CV || mapped.O;
+    const dir = transform && transform.normal
+      ? transform.normal.clone()
+      : new THREE.Vector3(0, 1, 0);
+    if (dir.lengthSq() < 1e-9) dir.set(0, 1, 0);
+    dir.normalize();
+
+    const reference = mapped.P1 || mapped.P || mapped.PlanP || mapped.P2;
+    let length = reference ? reference.distanceTo(base) : 0;
+    if (length < 1e-6 && mapped.PlanP && mapped.O) length = mapped.PlanP.distanceTo(mapped.O);
+    if (length < 1e-6) length = MIN_P_CV_DISTANCE;
+    return base.clone().addScaledVector(dir, length);
+  }
+
+  function space3dPictureFrame(mapped, p0) {
+    const axis = new THREE.Vector3().subVectors(mapped.VPR, mapped.VPL);
+    const span = Math.max(1, axis.length());
+    axis.normalize();
+
+    const normal = new THREE.Vector3().subVectors(p0, mapped.CV || mapped.O);
+    if (normal.lengthSq() < 1e-6) normal.set(0, 1, 0);
+    normal.normalize();
+
+    const up = new THREE.Vector3().crossVectors(normal, axis);
+    if (up.lengthSq() < 1e-6) up.set(0, 0, -1);
+    up.normalize();
+
+    const center = (mapped.CV || mapped.O).clone();
+    const size = Math.max(
+      span,
+      center.distanceTo(mapped.VPL) * 2,
+      center.distanceTo(mapped.VPR) * 2
+    ) * 1.12;
+    const half = size / 2;
+    return {
+      name: '画面',
+      center,
+      axis,
+      up,
+      size,
+      width: size,
+      height: size,
+      corners: [
+        center.clone().addScaledVector(axis, -half).addScaledVector(up, half),
+        center.clone().addScaledVector(axis, half).addScaledVector(up, half),
+        center.clone().addScaledVector(axis, half).addScaledVector(up, -half),
+        center.clone().addScaledVector(axis, -half).addScaledVector(up, -half)
+      ]
+    };
+  }
+
+  function space3dPictureHorizontalSegment(pictureFrame, pointOnPlane) {
+    const half = Math.max(1, (pictureFrame.width || pictureFrame.size || 1) / 2);
+    const offset = new THREE.Vector3().subVectors(pointOnPlane, pictureFrame.center).dot(pictureFrame.up);
+    const mid = pictureFrame.center.clone().addScaledVector(pictureFrame.up, offset);
+    return [
+      mid.clone().addScaledVector(pictureFrame.axis, -half),
+      mid.clone().addScaledVector(pictureFrame.axis, half)
+    ];
+  }
+
+  function space3dReferencePlane(mapped, model) {
+    const baseLeft = mapped["A'"].clone();
+    const baseRight = mapped["A''"].clone();
+    const upDir = model && model.upDir ? model.upDir.clone().normalize() : new THREE.Vector3(0, 0, -1);
+    const refTop = model && model.vertices && model.vertices.A ? model.vertices.A : baseLeft.clone().addScaledVector(upDir, 80);
+    const refBase = model && model.vertices && model.vertices.a ? model.vertices.a : baseLeft;
+    const height = new THREE.Vector3().subVectors(refTop, refBase).dot(upDir);
+    const topRight = baseRight.clone().addScaledVector(upDir, height);
+    const topLeft = baseLeft.clone().addScaledVector(upDir, height);
+    return [baseLeft, baseRight, topRight, topLeft];
+  }
+
+  function space3dMatchedDisplayFov(mapped, p0, pictureFrame = null) {
+    const frontSvg = document.getElementById('front2d');
+    const viewHeight = frontSvg && frontSvg.viewBox && frontSvg.viewBox.baseVal
+      ? frontSvg.viewBox.baseVal.height
+      : 940;
+    const displayHeight = pictureFrame && Number.isFinite(pictureFrame.height)
+      ? pictureFrame.height
+      : viewHeight;
+    const eyeDistance = Math.max(1, p0.distanceTo(mapped.CV || mapped.O));
+    const fovDeg = 2 * Math.atan(displayHeight / (2 * eyeDistance)) * 180 / Math.PI;
+    return Math.max(10, Math.min(150, fovDeg));
+  }
+
+  function applySpace3dView(camera, controls, pictureFrame, p0, mapped, mode, model = null) {
+    const normal = new THREE.Vector3().subVectors(p0, mapped.CV || mapped.O);
+    if (normal.lengthSq() < 1e-6) normal.set(0, 1, 0);
+    normal.normalize();
+
+    const baseTarget = mapped.CV || mapped.O;
+    const distance = Math.max(1, p0.distanceTo(mapped.CV || mapped.O));
+    const position = new THREE.Vector3();
+    let target = baseTarget.clone();
+    let up = pictureFrame.up.clone();
+    const worldUp = model && model.upDir && model.upDir.lengthSq() > 1e-6
+      ? model.upDir.clone().normalize()
+      : pictureFrame.up.clone().normalize();
+
+    if (mode === 'top') {
+      target = model && model.vertices
+        ? new THREE.Vector3().add(model.vertices.a).add(model.vertices.b).add(model.vertices.c).add(model.vertices.d).multiplyScalar(0.25)
+        : baseTarget.clone();
+      position.copy(target).addScaledVector(worldUp, distance);
+      up = normal.clone();
+    } else if (mode === 'sideFrame') {
+      target = pictureFrame.center.clone();
+      position.copy(target).addScaledVector(pictureFrame.axis, distance);
+      up = pictureFrame.up.clone();
+    } else if (mode === 'sideGround') {
+      target = model && model.vertices
+        ? new THREE.Vector3().add(model.vertices.a).add(model.vertices.b).add(model.vertices.c).add(model.vertices.d).multiplyScalar(0.25)
+        : mapped.O.clone();
+      position.copy(target).addScaledVector(pictureFrame.axis, distance);
+      up = worldUp.clone();
+    } else {
+      target = baseTarget.clone();
+      position.copy(p0);
+      up = pictureFrame.up.clone();
+    }
+
+    controls.target.copy(target);
+    camera.up.copy(up);
+    camera.position.copy(position);
+    camera.lookAt(target);
+    syncSpace3dCameraProjection();
+  }
+
+  function addSpace3dWorldExample(group, model, mapped, p0) {
+    const v = model.vertices;
+    const groundCenter = new THREE.Vector3()
+      .add(v.a).add(v.b).add(v.c).add(v.d)
+      .multiplyScalar(0.25);
+    const size = 32000;
+    const groundNormal = model.groundNormal && model.groundNormal.lengthSq() > 1e-6
+      ? model.groundNormal.clone().normalize()
+      : new THREE.Vector3(0, 0, 1);
+    const upDir = model.upDir && model.upDir.lengthSq() > 1e-6
+      ? model.upDir.clone().normalize()
+      : groundNormal.clone();
+
+    const skyGeometry = new THREE.SphereGeometry(size * 0.72, 40, 20);
+    const skyMaterial = new THREE.MeshBasicMaterial({
+      color: 0xdff1ff,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+    const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+    sky.position.copy(groundCenter).addScaledVector(upDir, size * 0.25);
+    group.add(sky);
+
+    const back = new THREE.Vector3().subVectors(mapped.CV || mapped.O, p0);
+    if (back.lengthSq() < 1e-6) back.set(0, -1, 0);
+    back.addScaledVector(groundNormal, -back.dot(groundNormal));
+    if (back.lengthSq() < 1e-6 && mapped.VP1) back.subVectors(mapped.VP1, p0).addScaledVector(groundNormal, -new THREE.Vector3().subVectors(mapped.VP1, p0).dot(groundNormal));
+    if (back.lengthSq() < 1e-6) back.set(1, 0, 0);
+    back.normalize();
+    const side = new THREE.Vector3().crossVectors(groundNormal, back);
+    if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+    side.normalize();
+
+    const near = groundCenter.clone().addScaledVector(back, -size * 0.38);
+    const far = groundCenter.clone().addScaledVector(back, size);
+    const ground = [
+      near.clone().addScaledVector(side, -size),
+      near.clone().addScaledVector(side, size),
+      far.clone().addScaledVector(side, size),
+      far.clone().addScaledVector(side, -size)
+    ];
+    addSpace3dFace(group, ground, '#ead6bd', 0.84);
+  }
+
+  function addSpace3dExamplePeople(group, mapped, p0, points, transform, model = null) {
+    const frame = space3dExampleFrame(mapped, p0);
+    const upDir = model && model.upDir && model.upDir.lengthSq() > 1e-6
+      ? model.upDir.clone().normalize()
+      : frame.up.clone().normalize();
+    const downDir = upDir.clone().multiplyScalar(-1);
+    let groundPoint = model && model.groundPlane
+      ? space3dRayPlaneIntersection(p0, downDir, model.groundPlane.point, model.groundPlane.normal)
+      : null;
+    if (groundPoint && new THREE.Vector3().subVectors(groundPoint, p0).dot(downDir) < 0) {
+      groundPoint = space3dRayPlaneIntersection(p0, upDir, model.groundPlane.point, model.groundPlane.normal);
+    }
+    const footPoint = groundPoint || p0.clone().addScaledVector(downDir, Math.max(48, mapped.O ? mapped.O.distanceTo(mapped.CV || mapped.O) : 120));
+    const height = Math.max(48, Math.min(1400, footPoint.distanceTo(p0)));
+    const leftTarget = space3dVpOriginArmTarget(p0, mapped.VP1 || mapped.VPL, footPoint, upDir, height);
+    const rightTarget = space3dVpOriginArmTarget(p0, mapped.VP2 || mapped.VPR, footPoint, upDir, height);
+    addSpace3dHingedPerson(group, p0, height, footPoint, frame.axis, frame.up, frame.normal, leftTarget, rightTarget, 1, upDir);
+
+  }
+
+  function space3dVpOriginArmTarget(eye, vanishPoint, origin, upDir, height) {
+    const dir = new THREE.Vector3().subVectors(vanishPoint, eye);
+    const groundUp = upDir && upDir.lengthSq() > 1e-6
+      ? upDir.clone().normalize()
+      : new THREE.Vector3(0, 0, -1);
+    dir.addScaledVector(groundUp, -dir.dot(groundUp));
+    if (dir.lengthSq() < 1e-6) dir.subVectors(vanishPoint, eye);
+    if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+    dir.normalize();
+    return origin.clone().addScaledVector(dir, Math.max(1200, height * 12));
+  }
+
+  function space3dExampleFrame(mapped, p0) {
+    const axis = new THREE.Vector3().subVectors(mapped.VPR, mapped.VPL);
+    if (axis.lengthSq() < 1e-6) axis.set(1, 0, 0);
+    axis.normalize();
+
+    const normal = new THREE.Vector3().subVectors(p0, mapped.CV || mapped.O);
+    if (normal.lengthSq() < 1e-6) normal.set(0, 1, 0);
+    normal.normalize();
+
+    const up = new THREE.Vector3().crossVectors(normal, axis);
+    if (up.lengthSq() < 1e-6) up.set(0, 0, -1);
+    up.normalize();
+    if (up.z > 0) up.multiplyScalar(-1);
+    return { axis, normal, up };
+  }
+
+  function space3dRayDisplayPoint(origin, direction, distanceValue) {
+    const dir = direction.clone();
+    if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+    dir.normalize();
+    return origin.clone().addScaledVector(dir, distanceValue);
+  }
+
+  function addSpace3dHingedPerson(group, eye, height, groundPoint, axis, headUp, faceNormal, leftTarget, rightTarget, opacity, upDir = null) {
+    const shoulder = axis.clone();
+    if (shoulder.lengthSq() < 1e-6) shoulder.set(1, 0, 0);
+    shoulder.normalize();
+
+    const headUpDir = headUp.clone();
+    if (headUpDir.lengthSq() < 1e-6) headUpDir.set(0, 0, -1);
+    headUpDir.normalize();
+    if (headUpDir.z > 0) headUpDir.multiplyScalar(-1);
+    const headDown = headUpDir.clone().multiplyScalar(-1);
+
+    const bodyDown = upDir && upDir.lengthSq() > 1e-6
+      ? upDir.clone().normalize().multiplyScalar(-1)
+      : new THREE.Vector3(0, 0, 1);
+    const faceDir = faceNormal.clone();
+    if (faceDir.lengthSq() < 1e-6) faceDir.set(0, 1, 0);
+    faceDir.normalize();
+
+    const headR = height / 13;
+    const torsoHalf = height * 0.105;
+    const torsoRy = Math.max(5, height * 0.17);
+    const pelvisRx = height * 0.082;
+    const pelvisRy = Math.max(2.4, height * 0.045);
+    const legAnchorHalf = pelvisRx * 0.52;
+    const footHalf = height * 0.055;
+    const handR = height * 0.030;
+    const footR = height * 0.034;
+    const armLength = height * 0.43;
+
+    const headCenter = eye.clone().addScaledVector(headDown, headR * 0.18);
+    const hinge = headCenter.clone().addScaledVector(headDown, headR * 0.92);
+    const bodyNeck = hinge.clone().addScaledVector(bodyDown, Math.max(2, height * 0.035));
+    const torsoCenter = bodyNeck.clone().addScaledVector(bodyDown, torsoRy);
+    const pelvisCenter = torsoCenter.clone().addScaledVector(bodyDown, torsoRy + pelvisRy * 0.65);
+    const bodyCenter = torsoCenter.clone().lerp(pelvisCenter, 0.45);
+    const leftHip = pelvisCenter.clone().addScaledVector(shoulder, -legAnchorHalf).addScaledVector(bodyDown, pelvisRy * 0.20);
+    const rightHip = pelvisCenter.clone().addScaledVector(shoulder, legAnchorHalf).addScaledVector(bodyDown, pelvisRy * 0.20);
+    const footCenter = groundPoint && groundPoint.isVector3
+      ? groundPoint.clone().addScaledVector(bodyDown, -footR * 0.8)
+      : eye.clone().addScaledVector(bodyDown, height - footR * 0.8);
+    const leftFoot = footCenter.clone().addScaledVector(shoulder, -footHalf);
+    const rightFoot = footCenter.clone().addScaledVector(shoulder, footHalf);
+    const leftHand = space3dPointToward(bodyCenter, leftTarget, armLength, shoulder.clone().multiplyScalar(-1));
+    const rightHand = space3dPointToward(bodyCenter, rightTarget, armLength, shoulder);
+    const headNeck = headCenter.clone().addScaledVector(headDown, headR * 0.72);
+
+    addSpace3dExampleLine(group, headNeck, hinge, opacity);
+    addSpace3dExampleLine(group, hinge, bodyNeck, opacity);
+    addSpace3dExampleLine(group, bodyCenter, leftHand, opacity);
+    addSpace3dExampleLine(group, bodyCenter, rightHand, opacity);
+    addSpace3dExampleLine(group, leftHip, leftFoot, opacity);
+    addSpace3dExampleLine(group, rightHip, rightFoot, opacity);
+    addSpace3dExampleEllipse(group, torsoCenter, shoulder, bodyDown, torsoHalf, torsoRy, opacity);
+    addSpace3dExampleEllipse(group, pelvisCenter, shoulder, bodyDown, pelvisRx, pelvisRy, opacity);
+    addSpace3dExampleEllipse(group, headCenter, shoulder, headDown, headR * 0.82, headR * 1.12, opacity);
+    addSpace3dExampleNose(group, eye.clone().addScaledVector(headDown, headR * 0.18), faceDir, shoulder, headR * 0.28, opacity);
+    addSpace3dExampleDisc(group, leftHand, handR, opacity);
+    addSpace3dExampleDisc(group, rightHand, handR, opacity);
+    addSpace3dExampleEllipse(group, leftFoot, shoulder, bodyDown, footR * 1.5, footR * 0.8, opacity);
+    addSpace3dExampleEllipse(group, rightFoot, shoulder, bodyDown, footR * 1.5, footR * 0.8, opacity);
+    addSpace3dExampleEye(group, eye, Math.max(1.2, height * 0.018), opacity);
+    addSpace3dExampleEye(group, hinge, Math.max(1.0, height * 0.011), opacity);
+  }
+
+  function addSpace3dFrontPerson(group, eye, height, axis, up, leftTarget, rightTarget, noseDir, opacity) {
+    const down = up.clone().multiplyScalar(-1);
+    const headR = height / 13;
+    const torsoHalf = height * 0.105;
+    const torsoRy = Math.max(5, height * 0.17);
+    const pelvisRx = height * 0.082;
+    const pelvisRy = Math.max(2.4, height * 0.045);
+    const legAnchorHalf = pelvisRx * 0.52;
+    const footHalf = height * 0.055;
+    const handR = height * 0.030;
+    const footR = height * 0.034;
+    const armLength = height * 0.43;
+
+    const headCenter = eye.clone().addScaledVector(down, headR * 0.18);
+    const torsoCenter = eye.clone().addScaledVector(down, headR * 1.78 + torsoRy);
+    const pelvisCenter = torsoCenter.clone().addScaledVector(down, torsoRy + pelvisRy * 0.65);
+    const bodyCenter = torsoCenter.clone().lerp(pelvisCenter, 0.45);
+    const neckTop = headCenter.clone().addScaledVector(down, headR * 0.80);
+    const neckBottom = torsoCenter.clone().addScaledVector(down, -torsoRy + height * 0.025);
+    const leftHip = pelvisCenter.clone().addScaledVector(axis, -legAnchorHalf).addScaledVector(down, pelvisRy * 0.20);
+    const rightHip = pelvisCenter.clone().addScaledVector(axis, legAnchorHalf).addScaledVector(down, pelvisRy * 0.20);
+    const footCenter = eye.clone().addScaledVector(down, height - footR * 0.8);
+    const leftFoot = footCenter.clone().addScaledVector(axis, -footHalf);
+    const rightFoot = footCenter.clone().addScaledVector(axis, footHalf);
+    const leftHand = space3dPointToward(bodyCenter, leftTarget, armLength, axis.clone().multiplyScalar(-1));
+    const rightHand = space3dPointToward(bodyCenter, rightTarget, armLength, axis);
+
+    addSpace3dExampleLine(group, neckTop, neckBottom, opacity);
+    addSpace3dExampleLine(group, bodyCenter, leftHand, opacity);
+    addSpace3dExampleLine(group, bodyCenter, rightHand, opacity);
+    addSpace3dExampleLine(group, leftHip, leftFoot, opacity);
+    addSpace3dExampleLine(group, rightHip, rightFoot, opacity);
+    addSpace3dExampleEllipse(group, torsoCenter, axis, down, torsoHalf, torsoRy, opacity);
+    addSpace3dExampleEllipse(group, pelvisCenter, axis, down, pelvisRx, pelvisRy, opacity);
+    addSpace3dExampleEllipse(group, headCenter, axis, down, headR * 0.82, headR * 1.12, opacity);
+    addSpace3dExampleNose(group, eye.clone().addScaledVector(down, headR * 0.18), noseDir, axis, headR * 0.28, opacity);
+    addSpace3dExampleDisc(group, leftHand, handR, opacity);
+    addSpace3dExampleDisc(group, rightHand, handR, opacity);
+    addSpace3dExampleEllipse(group, leftFoot, axis, down, footR * 1.5, footR * 0.8, opacity);
+    addSpace3dExampleEllipse(group, rightFoot, axis, down, footR * 1.5, footR * 0.8, opacity);
+    addSpace3dExampleEye(group, eye, Math.max(1.2, height * 0.018), opacity);
+  }
+
+  function addSpace3dSidePerson(group, eye, height, up, sideDir, lookTarget, secondTarget, opacity) {
+    const down = up.clone().multiplyScalar(-1);
+    const look = new THREE.Vector3().subVectors(lookTarget, eye);
+    if (look.lengthSq() < 1e-6) look.copy(sideDir);
+    look.normalize();
+
+    const headR = height / 13;
+    const torsoRx = height * 0.070;
+    const torsoRy = Math.max(5, height * 0.17);
+    const pelvisRx = height * 0.060;
+    const pelvisRy = Math.max(2.4, height * 0.045);
+    const handR = height * 0.030;
+    const footR = height * 0.034;
+    const armLength = height * 0.34;
+
+    const headCenter = eye.clone().addScaledVector(look, -headR * 0.18).addScaledVector(down, headR * 0.18);
+    const torsoCenter = eye.clone().addScaledVector(down, headR * 1.76 + torsoRy);
+    const pelvisCenter = torsoCenter.clone().addScaledVector(down, torsoRy + pelvisRy * 0.65);
+    const bodyCenter = torsoCenter.clone().lerp(pelvisCenter, 0.45);
+    const neckTop = headCenter.clone().addScaledVector(down, headR * 0.86);
+    const neckBottom = torsoCenter.clone().addScaledVector(down, -torsoRy + height * 0.025);
+    const hand = space3dPointToward(bodyCenter, lookTarget, armLength, look);
+    const secondHand = space3dPointToward(bodyCenter, secondTarget, armLength, look);
+    const hip = pelvisCenter.clone().addScaledVector(down, pelvisRy * 0.20);
+    const foot = eye.clone().addScaledVector(down, height - footR * 0.8).addScaledVector(look, height * 0.035);
+
+    addSpace3dExampleLine(group, neckTop, neckBottom, opacity);
+    addSpace3dExampleLine(group, bodyCenter, hand, opacity);
+    addSpace3dExampleLine(group, bodyCenter, secondHand, opacity);
+    addSpace3dExampleLine(group, hip, foot, opacity);
+    addSpace3dExampleEllipse(group, torsoCenter, look, down, torsoRx, torsoRy, opacity);
+    addSpace3dExampleEllipse(group, pelvisCenter, look, down, pelvisRx, pelvisRy, opacity);
+    addSpace3dExampleEllipse(group, headCenter, look, down, headR * 0.78, headR * 1.10, opacity);
+    addSpace3dExampleNose(group, eye.clone().addScaledVector(down, headR * 0.16), look, up, headR * 0.30, opacity);
+    addSpace3dExampleDisc(group, hand, handR, opacity);
+    addSpace3dExampleDisc(group, secondHand, handR, opacity);
+    addSpace3dExampleEllipse(group, foot, look, down, footR * 1.7, footR * 0.8, opacity);
+    addSpace3dExampleEye(group, eye, Math.max(1.2, height * 0.018), opacity);
+  }
+
+  function addSpace3dTopPerson(group, eye, height, axis, forward, leftTarget, rightTarget, cvPoint, opacity) {
+    const shoulderDir = axis.clone();
+    if (shoulderDir.lengthSq() < 1e-6) shoulderDir.set(1, 0, 0);
+    shoulderDir.normalize();
+    const bodyDir = forward.clone();
+    if (bodyDir.lengthSq() < 1e-6) bodyDir.set(0, 1, 0);
+    bodyDir.normalize();
+
+    const headR = height / 13;
+    const handR = height * 0.030;
+    const topLen = height * 0.30;
+    const topWidth = height * 0.18;
+    const handLength = height * 0.43;
+    const leftHand = space3dPointToward(eye, leftTarget, handLength, shoulderDir.clone().multiplyScalar(-1));
+    const rightHand = space3dPointToward(eye, rightTarget, handLength, shoulderDir);
+    const noseDir = new THREE.Vector3().subVectors(cvPoint, eye);
+    if (noseDir.lengthSq() < 1e-6) noseDir.copy(bodyDir);
+    noseDir.normalize();
+
+    addSpace3dExampleLine(group, eye, leftHand, opacity);
+    addSpace3dExampleLine(group, eye, rightHand, opacity);
+    addSpace3dExampleLine(
+      group,
+      eye.clone().addScaledVector(shoulderDir, -topLen * 0.32),
+      eye.clone().addScaledVector(shoulderDir, topLen * 0.32),
+      opacity
+    );
+    addSpace3dExampleEllipse(group, eye, shoulderDir, bodyDir, topLen / 2, topWidth / 2, opacity);
+    addSpace3dExampleEllipse(group, eye, shoulderDir, bodyDir, headR * 1.12, headR * 0.82, opacity);
+    addSpace3dExampleNose(group, eye, noseDir, shoulderDir, headR * 0.28, opacity);
+    addSpace3dExampleDisc(group, leftHand, handR, opacity);
+    addSpace3dExampleDisc(group, rightHand, handR, opacity);
+    addSpace3dExampleEye(group, eye, Math.max(1.2, height * 0.018), opacity);
+  }
+
+  function space3dPointToward(from, to, lengthValue, fallback) {
+    const dir = new THREE.Vector3().subVectors(to, from);
+    if (dir.lengthSq() < 1e-6) dir.copy(fallback);
+    if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+    dir.normalize();
+    return from.clone().addScaledVector(dir, lengthValue);
+  }
+
+  function addSpace3dExampleLine(group, from, to, opacity) {
+    const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const material = new THREE.LineBasicMaterial({
+      color: 0x333333,
+      transparent: opacity < 1,
+      opacity,
+      depthTest: false
+    });
+    const line = new THREE.Line(geometry, material);
+    line.renderOrder = 30;
+    group.add(line);
+    return line;
+  }
+
+  function addSpace3dExampleEllipse(group, center, uDir, vDir, rx, ry, opacity) {
+    const u = uDir.clone();
+    const v = vDir.clone();
+    if (u.lengthSq() < 1e-6) u.set(1, 0, 0);
+    if (v.lengthSq() < 1e-6) v.set(0, 0, 1);
+    u.normalize();
+    v.normalize();
+    const vertices = [center.clone()];
+    const segments = 36;
+    for (let i = 0; i <= segments; i++) {
+      const t = Math.PI * 2 * i / segments;
+      vertices.push(center.clone().addScaledVector(u, Math.cos(t) * rx).addScaledVector(v, Math.sin(t) * ry));
+    }
+    const positions = vertices.flatMap(p => [p.x, p.y, p.z]);
+    const indices = [];
+    for (let i = 1; i < vertices.length - 1; i++) indices.push(0, i, i + 1);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffd4df,
+      transparent: opacity < 1,
+      opacity,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 30;
+    group.add(mesh);
+    addSpace3dExampleEllipseOutline(group, center, u, v, rx, ry, opacity);
+    return mesh;
+  }
+
+  function addSpace3dExampleEllipseOutline(group, center, u, v, rx, ry, opacity) {
+    const points = [];
+    const segments = 48;
+    for (let i = 0; i <= segments; i++) {
+      const t = Math.PI * 2 * i / segments;
+      points.push(center.clone().addScaledVector(u, Math.cos(t) * rx).addScaledVector(v, Math.sin(t) * ry));
+    }
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color: 0x333333,
+      transparent: opacity < 1,
+      opacity,
+      depthTest: false
+    });
+    const line = new THREE.Line(geometry, material);
+    line.renderOrder = 30;
+    group.add(line);
+  }
+
+  function addSpace3dExampleDisc(group, center, radius, opacity) {
+    return addSpace3dExampleEllipse(group, center, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), radius, radius, opacity);
+  }
+
+  function addSpace3dExampleEye(group, center, radius, opacity) {
+    const geometry = new THREE.SphereGeometry(radius, 12, 8);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x111111,
+      transparent: opacity < 1,
+      opacity,
+      depthTest: false,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(center);
+    mesh.renderOrder = 31;
+    group.add(mesh);
+  }
+
+  function addSpace3dExampleNose(group, center, direction, baseDir, size, opacity) {
+    const dir = direction.clone();
+    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
+    dir.normalize();
+    const base = baseDir.clone();
+    if (base.lengthSq() < 1e-6) base.set(1, 0, 0);
+    base.normalize();
+    const p1 = center.clone().addScaledVector(base, size * 0.45);
+    const p2 = center.clone().addScaledVector(base, -size * 0.45);
+    const tip = center.clone().addScaledVector(dir, size * 1.35);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+      p1.x, p1.y, p1.z,
+      tip.x, tip.y, tip.z,
+      p2.x, p2.y, p2.z
+    ], 3));
+    geometry.setIndex([0, 1, 2]);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffd4df,
+      transparent: opacity < 1,
+      opacity,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 30;
+    group.add(mesh);
+    addSpace3dExampleLine(group, p1, tip, opacity);
+    addSpace3dExampleLine(group, tip, p2, opacity);
+    addSpace3dExampleLine(group, p2, p1, opacity);
+  }
+
+  function buildSpace3dModel(points, transform = null, mapped = null, p0 = null, pictureFrame = null) {
+    if (points.cube && mapped && p0 && pictureFrame) {
+      return buildSpace3dModelFromProjection(points, transform, mapped, p0, pictureFrame);
+    }
+
+    const side = Math.max(24, Math.hypot(points.a.x - points.A.x, points.a.y - points.A.y));
+    const origin = mapToSpace3d(points.a, transform);
+    const axisX = transform && transform.axisX ? transform.axisX.clone().normalize() : new THREE.Vector3(1, 0, 0);
+    const axisY = transform && transform.axisY ? transform.axisY.clone().normalize() : new THREE.Vector3(0, -1, 0);
+    const upDir = transform && transform.normal ? transform.normal.clone().normalize() : new THREE.Vector3(0, 0, -1);
+    const leftDir = axisX.clone().multiplyScalar(-1);
+    const rightDir = axisY.clone().multiplyScalar(-1);
+    const roofUp = upDir.clone().multiplyScalar(side * Math.tan(Math.max(1, Math.min(80, FRONT2D_STATE.roofDeltaDeg)) * Math.PI / 180));
+    const a = origin.clone();
+    const b = a.clone().addScaledVector(leftDir, side);
+    const c = a.clone().addScaledVector(rightDir, side);
+    const d = b.clone().addScaledVector(rightDir, side);
+    const A = a.clone().addScaledVector(upDir, side);
+    const B = b.clone().addScaledVector(upDir, side);
+    const C = c.clone().addScaledVector(upDir, side);
+    const D = d.clone().addScaledVector(upDir, side);
+    const E = B.clone().add(roofUp);
+    const F = D.clone().add(roofUp);
+    const vertices = { a, b, c, d, A, B, C, D, E, F };
+    applySpace3dHeightOffset(vertices, upDir);
+    const groundNormal = upDir.clone();
+    return {
+      vertices,
+      groundNormal,
+      upDir,
+      groundPlane: { point: a.clone(), normal: groundNormal.clone() }
+    };
+  }
+
+  function buildSpace3dModelFromProjection(points, transform, mapped, p0, pictureFrame) {
+    const cube2d = points.cube || {};
+    const footprint2d = points.baseCube || cube2d;
+    const roof2d = points.baseRoof || points.roof || {};
+    const basis = space3dPerspectiveBasis(points, transform, mapped, p0, pictureFrame);
+    const projectGround = (point2d) => space3dProjectImagePointToGround(point2d, p0, basis, transform);
+    const projectVertical = (point2d, basePoint) => space3dProjectImagePointToVertical(point2d, basePoint, p0, basis, transform);
+
+    const a = projectGround(footprint2d.a || cube2d.a || points.a);
+    const b = projectGround(footprint2d.b || cube2d.b || points.a);
+    const c = projectGround(footprint2d.c || cube2d.c || points.a);
+    const d = projectGround(footprint2d.d || cube2d.d || points.a);
+    const A = projectVertical(footprint2d.A || cube2d.A || points.A, a);
+    const B = projectVertical(footprint2d.B || cube2d.B || points.A, b);
+    const C = projectVertical(footprint2d.C || cube2d.C || points.A, c);
+    const D = projectVertical(footprint2d.D || cube2d.D || points.A, d);
+    const E = roof2d.E ? projectVertical(roof2d.E, b) : B.clone();
+    const F = roof2d.F ? projectVertical(roof2d.F, d) : D.clone();
+
+    let upDir = new THREE.Vector3().subVectors(A, a);
+    if (upDir.lengthSq() < 1e-6) upDir.copy(basis.verticalDir).multiplyScalar(-1);
+    upDir.normalize();
+    const minRise = Math.max(2, Math.abs(new THREE.Vector3().subVectors(A, a).dot(upDir)) * 0.08, 6);
+    const ensureAbove = (top, base) => {
+      const rise = new THREE.Vector3().subVectors(top, base).dot(upDir);
+      if (!Number.isFinite(rise) || rise < minRise) top.copy(base).addScaledVector(upDir, minRise);
+    };
+    ensureAbove(A, a);
+    ensureAbove(B, b);
+    ensureAbove(C, c);
+    ensureAbove(D, d);
+    ensureAbove(E, B);
+    ensureAbove(F, D);
+
+    const vertices = { a, b, c, d, A, B, C, D, E, F };
+    applySpace3dHeightOffset(vertices, upDir);
+    return {
+      vertices,
+      groundNormal: basis.groundNormal.clone(),
+      upDir,
+      verticalDir: basis.verticalDir.clone(),
+      groundPlane: {
+        point: basis.groundPlane.point.clone(),
+        normal: basis.groundPlane.normal.clone()
+      }
+    };
+  }
+
+  function applySpace3dHeightOffset(vertices, upDir = null) {
+    const heightUnits = clampNumeric(Number(FRONT2D_STATE.heightUnits), 0, 5);
+    if (!heightUnits || !vertices || !vertices.a || !vertices.A) return;
+    const dir = upDir && upDir.lengthSq() > 1e-6
+      ? upDir.clone().normalize()
+      : new THREE.Vector3().subVectors(vertices.A, vertices.a).normalize();
+    if (dir.lengthSq() < 1e-6) return;
+    const unitHeight = Math.max(2, Math.abs(new THREE.Vector3().subVectors(vertices.A, vertices.a).dot(dir)));
+    const offset = unitHeight * heightUnits;
+    for (const vertex of Object.values(vertices)) {
+      vertex.addScaledVector(dir, offset);
+    }
+  }
+
+  function space3dPerspectiveBasis(points, transform, mapped, p0, pictureFrame) {
+    const vp1Dir = directionFromTo(p0, mapped.VP1 || mapped.VPL);
+    const vp2Dir = directionFromTo(p0, mapped.VP2 || mapped.VPR);
+    const verticalDir = directionFromTo(p0, mapped.VP3);
+    let groundNormal = new THREE.Vector3().crossVectors(vp1Dir, vp2Dir);
+    if (groundNormal.lengthSq() < 1e-9) groundNormal.copy(verticalDir);
+    groundNormal.normalize();
+    if (groundNormal.dot(verticalDir) < 0) groundNormal.multiplyScalar(-1);
+
+    const anchor2d = points.baseA || (points.baseCube && points.baseCube.a) || points.a || (points.cube && points.cube.a);
+    const anchorOnPicture = anchor2d ? mapToSpace3d(anchor2d, transform) : (mapped.a || mapped.O || pictureFrame.center);
+    const center = mapped.O || pictureFrame.center;
+    let sideSign = -1;
+    if (anchorOnPicture && center && pictureFrame && pictureFrame.up) {
+      const side = new THREE.Vector3().subVectors(anchorOnPicture, center).dot(pictureFrame.up);
+      if (Math.abs(side) > 1e-6) sideSign = Math.sign(side);
+    }
+    const half = Math.max(1, (pictureFrame.height || pictureFrame.size || 1) / 2);
+    const groundPoint = pictureFrame.center.clone().addScaledVector(pictureFrame.up, sideSign * half);
+    return {
+      vp1Dir,
+      vp2Dir,
+      verticalDir,
+      groundNormal,
+      groundPlane: {
+        point: groundPoint,
+        normal: groundNormal.clone()
+      }
+    };
+  }
+
+  function space3dRayPlaneIntersection(origin, direction, planePoint, planeNormal) {
+    const dir = direction.clone();
+    if (dir.lengthSq() < 1e-9) dir.set(0, 1, 0);
+    dir.normalize();
+    const normal = planeNormal.clone();
+    if (normal.lengthSq() < 1e-9) normal.set(0, 0, 1);
+    normal.normalize();
+    const denom = dir.dot(normal);
+    if (Math.abs(denom) < 1e-8) return null;
+    const t = new THREE.Vector3().subVectors(planePoint, origin).dot(normal) / denom;
+    if (!Number.isFinite(t)) return null;
+    return origin.clone().addScaledVector(dir, t);
+  }
+
+  function space3dProjectImagePointToGround(point2d, p0, basis, transform) {
+    const imagePoint = mapToSpace3d(point2d, transform);
+    const direction = new THREE.Vector3().subVectors(imagePoint, p0);
+    const projected = space3dRayPlaneIntersection(p0, direction, basis.groundPlane.point, basis.groundPlane.normal);
+    if (projected) return projected;
+    return imagePoint.clone();
+  }
+
+  function space3dProjectImagePointToVertical(point2d, basePoint, p0, basis, transform) {
+    const imagePoint = mapToSpace3d(point2d, transform);
+    const rayDir = new THREE.Vector3().subVectors(imagePoint, p0);
+    if (rayDir.lengthSq() < 1e-9) return basePoint.clone();
+    rayDir.normalize();
+    const lineDir = basis.verticalDir.clone();
+    if (lineDir.lengthSq() < 1e-9) lineDir.copy(basis.groundNormal);
+    lineDir.normalize();
+    const w0 = new THREE.Vector3().subVectors(p0, basePoint);
+    const a = 1;
+    const b = rayDir.dot(lineDir);
+    const c = 1;
+    const d = rayDir.dot(w0);
+    const e = lineDir.dot(w0);
+    const denom = a * c - b * b;
+    if (Math.abs(denom) < 1e-8) {
+      return basePoint.clone().addScaledVector(lineDir, 80);
+    }
+    const t = (b * e - c * d) / denom;
+    const s = (a * e - b * d) / denom;
+    const onRay = p0.clone().addScaledVector(rayDir, t);
+    const onLine = basePoint.clone().addScaledVector(lineDir, s);
+    if (!isFiniteVector3(onRay) || !isFiniteVector3(onLine)) return basePoint.clone();
+    // 模型点必须严格落在过底点的真实竖直线上；onRay 只用于数值校验。
+    return onLine;
+  }
+
+  function isFiniteVector3(vector) {
+    return vector && Number.isFinite(vector.x) && Number.isFinite(vector.y) && Number.isFinite(vector.z);
+  }
+
+  function signedVanishingDirection(eye, vanishingPoint, fromPoint, expectedPoint) {
+    const dir = directionFromTo(eye, vanishingPoint);
+    const expected = new THREE.Vector3().subVectors(expectedPoint, fromPoint);
+    if (expected.dot(dir) < 0) dir.multiplyScalar(-1);
+    return dir;
+  }
+
+  function directionFromTo(from, to) {
+    const dir = new THREE.Vector3().subVectors(to, from);
+    if (dir.lengthSq() < 1e-9) dir.set(1, 0, 0);
+    return dir.normalize();
+  }
+
+  function pointBeyondPicture(eye, picturePoint, scale) {
+    return eye.clone().add(new THREE.Vector3().subVectors(picturePoint, eye).multiplyScalar(scale));
+  }
+
+  function pointOnVanishingLineThroughProjection(lineOrigin, vanishDir, eye, picturePoint) {
+    const rayDir = directionFromTo(eye, picturePoint);
+    const w0 = new THREE.Vector3().subVectors(lineOrigin, eye);
+    const b = vanishDir.dot(rayDir);
+    const d = vanishDir.dot(w0);
+    const e = rayDir.dot(w0);
+    const denom = 1 - b * b;
+    if (Math.abs(denom) < 1e-7) {
+      return pointBeyondPicture(eye, picturePoint, 1.62);
+    }
+    const lineT = (b * e - d) / denom;
+    const rayT = (e - b * d) / denom;
+    const onLine = lineOrigin.clone().addScaledVector(vanishDir, lineT);
+    const onRay = eye.clone().addScaledVector(rayDir, rayT);
+    return averageVector(onLine, onRay);
+  }
+
+  function averageVector(a, b) {
+    return a.clone().add(b).multiplyScalar(0.5);
+  }
+
+  function depthRatioFromProjection(eye, picturePoint, spacePoint) {
+    const pictureDistance = Math.max(1e-6, eye.distanceTo(picturePoint));
+    return Math.max(1.05, eye.distanceTo(spacePoint) / pictureDistance);
+  }
+
+  function angleAt2d(vertex, rayA, rayB) {
+    const v1x = rayA.x - vertex.x;
+    const v1y = rayA.y - vertex.y;
+    const v2x = rayB.x - vertex.x;
+    const v2y = rayB.y - vertex.y;
+    const dot = v1x * v2x + v1y * v2y;
+    const len1 = Math.hypot(v1x, v1y);
+    const len2 = Math.hypot(v2x, v2y);
+    const ratio = dot / Math.max(1e-9, len1 * len2);
+    return Math.acos(Math.max(-1, Math.min(1, ratio))) * 180 / Math.PI;
+  }
+
+  function addSpace3dModel(group, model) {
+    const v = model.vertices;
+    addSpace3dFace(group, [v.a, v.b, v.d, v.c], '#eef1f4', 0.42);
+    addSpace3dFace(group, [v.a, v.A, v.B, v.b], '#f7f8fa', 0.5);
+    addSpace3dFace(group, [v.a, v.c, v.C, v.A], '#f7f8fa', 0.46);
+    addSpace3dFace(group, [v.b, v.B, v.D, v.d], '#e9edf1', 0.36);
+    addSpace3dFace(group, [v.c, v.d, v.D, v.C], '#e9edf1', 0.34);
+    const edges = [
+      ['a', 'b'], ['b', 'd'], ['d', 'c'], ['c', 'a'],
+      ['a', 'A'], ['b', 'B'], ['c', 'C'], ['d', 'D'],
+      ['A', 'B'], ['B', 'D'], ['D', 'C'], ['C', 'A']
+    ];
+    for (const [from, to] of edges) {
+      addSpace3dLine(group, v[from], v[to], SVG_COLORS.black, 1.7);
+    }
+    for (const name of ['a', 'b', 'c', 'd', 'A', 'B', 'C', 'D']) {
+      addSpace3dPoint(group, v[name], SVG_COLORS.black, name);
+    }
+    for (const name of ['a', 'b', 'c', 'd', 'A', 'B', 'C', 'D']) {
+      addSpace3dLabel(name, v[name], SVG_COLORS.black);
+    }
+  }
+
+  function addSpace3dConstructionRays(group, mapped, model, p0) {
+    const v = model.vertices;
+    const vp1Dir = new THREE.Vector3().subVectors(mapped.VP1, p0);
+    const vp2Dir = new THREE.Vector3().subVectors(mapped.VP2, p0);
+    const vp3Dir = new THREE.Vector3().subVectors(mapped.VP3, p0);
+    addSpace3dRay(group, mapped['P(Q2)'], new THREE.Vector3().subVectors(mapped['P(Q2)'], p0), SVG_COLORS.half, 0.22, 0.56);
+    addSpace3dRay(group, mapped['P(Q1)'], new THREE.Vector3().subVectors(mapped['P(Q1)'], p0), SVG_COLORS.half, 0.22, 0.56);
+    addSpace3dRay(group, v.a, vp1Dir, SVG_COLORS.pink, 0.18, 0.5);
+    addSpace3dRay(group, v.A, vp1Dir, SVG_COLORS.pink, 0.18, 0.5);
+    addSpace3dRay(group, v.b, vp2Dir, SVG_COLORS.pink, 0.18, 0.5);
+    addSpace3dRay(group, v.c, vp1Dir, SVG_COLORS.pink, 0.18, 0.5);
+    addSpace3dRay(group, v.d, vp1Dir, SVG_COLORS.pink, 0.18, 0.5);
+    addSpace3dRay(group, v.d, vp2Dir, SVG_COLORS.pink, 0.18, 0.5);
+    for (const name of ['a', 'A', 'b', 'B', 'c', 'C', 'd', 'D']) {
+      addSpace3dRay(group, v[name], vp3Dir, SVG_COLORS.pink, 0.16, 0.42);
+    }
+  }
+
+  function addSpace3dVanishingOriginLabels(group, mapped, model, p0) {
+    const v = model.vertices;
+    const labels = [
+      ['VP1⁰', p0, new THREE.Vector3().subVectors(mapped.VP1, p0), SVG_COLORS.blue],
+      ['VP2⁰', p0, new THREE.Vector3().subVectors(mapped.VP2, p0), SVG_COLORS.yellow],
+      ['VP3⁰', p0, new THREE.Vector3().subVectors(mapped.VP3, p0), SVG_COLORS.pink],
+      ['P(Q2)⁰', mapped['P(Q2)'], new THREE.Vector3().subVectors(mapped['P(Q2)'], p0), SVG_COLORS.half],
+      ['P(Q1)⁰', mapped['P(Q1)'], new THREE.Vector3().subVectors(mapped['P(Q1)'], p0), SVG_COLORS.half]
+    ];
+    for (const [textValue, origin, direction, color] of labels) {
+      addSpace3dLabel(textValue, space3dRayEndPoint(origin, direction), color);
+    }
+  }
+
+  function addSpace3dFace(group, vertices, color, opacity, selectName = '') {
+    const positions = [];
+    for (const vertex of vertices) positions.push(vertex.x, vertex.y, vertex.z);
+    const indices = [];
+    for (let i = 1; i < vertices.length - 1; i++) indices.push(0, i, i + 1);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshBasicMaterial({
+      color: toThreeColor(color),
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    if (selectName) {
+      makeSpace3dSelectable(mesh, 'face', selectName);
+      if (isSpace3dSelected('face', selectName)) {
+        material.color.setHex(0xffe34d);
+        material.opacity = Math.max(opacity, 0.55);
+        addSpace3dFaceGlow(group, vertices);
+      }
+    }
+    group.add(mesh);
+    return mesh;
+  }
+
+  function addSpace3dFaceGlow(group, vertices) {
+    const positions = [];
+    for (const vertex of vertices) positions.push(vertex.x, vertex.y, vertex.z);
+    const indices = [];
+    for (let i = 1; i < vertices.length - 1; i++) indices.push(0, i, i + 1);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffe34d,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    group.add(new THREE.Mesh(geometry, material));
+  }
+
+  function addSpace3dFaceLabel(group, value, vertices, color) {
+    const left = vertices[0];
+    const right = vertices[1];
+    const top = vertices[2];
+    const center = left.clone().multiplyScalar(0.46)
+      .add(right.clone().multiplyScalar(0.16))
+      .add(top.clone().multiplyScalar(0.38));
+    addSpace3dLabel(value, center, color, 'space-face-label');
+  }
+
+  function addSpace3dAngle(group, value, vertex, rayA, rayB, color, radius, selectName = '') {
+    const v1 = new THREE.Vector3().subVectors(rayA, vertex);
+    const v2 = new THREE.Vector3().subVectors(rayB, vertex);
+    if (v1.lengthSq() < 1e-6 || v2.lengthSq() < 1e-6) return;
+    v1.normalize();
+    v2.normalize();
+
+    const normal = new THREE.Vector3().crossVectors(v1, v2);
+    if (normal.lengthSq() < 1e-6) return;
+    normal.normalize();
+
+    const angle = Math.acos(Math.max(-1, Math.min(1, v1.dot(v2))));
+    const arcPoints = [];
+    const segments = 32;
+    for (let i = 0; i <= segments; i++) {
+      const dir = v1.clone().applyAxisAngle(normal, angle * i / segments);
+      arcPoints.push(vertex.clone().addScaledVector(dir, radius));
+    }
+    const geometry = new THREE.BufferGeometry().setFromPoints(arcPoints);
+    const material = new THREE.LineBasicMaterial({ color: toThreeColor(color), linewidth: 1.4 });
+    const arc = new THREE.Line(geometry, material);
+    if (selectName) makeSpace3dSelectable(arc, 'line', selectName);
+    group.add(arc);
+    if (selectName && isSpace3dSelected('line', selectName)) {
+      const outlineGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints);
+      const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xffe34d, linewidth: 2.4, transparent: true, opacity: 0.95 });
+      group.add(new THREE.Line(outlineGeometry, outlineMaterial));
+    }
+
+    const midDir = v1.clone().applyAxisAngle(normal, angle * 0.5).normalize();
+    const labelCenter = vertex.clone().addScaledVector(midDir, radius + 3);
+    addSpace3dLabel(value, labelCenter, color, 'space-angle-label');
+  }
+
+  function addSpace3dTextPlane(group, value, center, uDir, vDir, width, height, color, opacity) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = color;
+    ctx.font = '700 40px Arial, "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(value, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    const u = uDir.clone().normalize().multiplyScalar(width / 2);
+    const v = vDir.clone().normalize().multiplyScalar(height / 2);
+    const corners = [
+      center.clone().sub(u).sub(v),
+      center.clone().add(u).sub(v),
+      center.clone().add(u).add(v),
+      center.clone().sub(u).add(v)
+    ];
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(corners.flatMap(p => [p.x, p.y, p.z]), 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    group.add(new THREE.Mesh(geometry, material));
+  }
+
+  function addSpace3dLine(group, from, to, color, width, opacity = 1) {
+    const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const material = new THREE.LineBasicMaterial({
+      color: toThreeColor(color),
+      linewidth: width,
+      transparent: opacity < 1,
+      opacity
+    });
+    const line = new THREE.Line(geometry, material);
+    group.add(line);
+    return line;
+  }
+
+  function addSpace3dSelectableLine(group, from, to, color, width, selectName, opacity = 1) {
+    const line = addSpace3dLine(group, from, to, color, width, opacity);
+    makeSpace3dSelectable(line, 'line', selectName);
+    if (isSpace3dSelected('line', selectName)) {
+      addSpace3dLine(group, from, to, '#ffe34d', 1.6, 0.95);
+    }
+    return line;
+  }
+
+  function addSpace3dInfiniteLine(group, p1, p2, selectName) {
+    const endpoints = space3dLongLineEndpoints(p1, p2);
+    return addSpace3dSelectableLine(group, endpoints.start, endpoints.end, '#d7dde3', 0.25, selectName, 0.42);
+  }
+
+  function addSpace3dInfiniteGuideLine(group, p1, p2) {
+    const endpoints = space3dLongLineEndpoints(p1, p2);
+    return addSpace3dLine(group, endpoints.start, endpoints.end, '#d7dde3', 0.25, 0.42);
+  }
+
+  function addSpace3dRay(group, origin, direction, color, width, opacity = 1) {
+    const end = space3dRayEndPoint(origin, direction);
+    return addSpace3dLine(group, origin, end, color, width, opacity);
+  }
+
+  function space3dRayEndPoint(origin, direction) {
+    const dir = direction.clone();
+    if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+    dir.normalize();
+    return origin.clone().addScaledVector(dir, 25000);
+  }
+
+  function space3dLongLineEndpoints(p1, p2) {
+    const dir = new THREE.Vector3().subVectors(p2, p1);
+    if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+    dir.normalize();
+    const center = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+    const halfLength = 25000;
+    return {
+      start: center.clone().addScaledVector(dir, -halfLength),
+      end: center.clone().addScaledVector(dir, halfLength)
+    };
+  }
+
+  function addSpace3dFrame(group, frame, color, width) {
+    const corners = frame.corners;
+    for (let i = 0; i < corners.length; i++) {
+      addSpace3dLine(group, corners[i], corners[(i + 1) % corners.length], color, width);
+    }
+  }
+
+  function addSpace3dPoint(group, position, color, selectName = '') {
+    const geometry = new THREE.SphereGeometry(SPACE3D_POINT_RADIUS, 16, 10);
+    const material = new THREE.MeshBasicMaterial({ color: toThreeColor(color) });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    if (selectName) makeSpace3dSelectable(mesh, 'symbol', selectName);
+    group.add(mesh);
+    if (selectName && isSpace3dSelected('symbol', selectName)) {
+      const outlineGeometry = new THREE.SphereGeometry(SPACE3D_POINT_RADIUS + 1.7, 18, 12);
+      const outlineMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffe34d,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.95
+      });
+      const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+      outline.position.copy(position);
+      group.add(outline);
+    }
+    return mesh;
+  }
+
+  function makeSpace3dSelectable(object, type, name) {
+    object.userData.selectable = true;
+    object.userData.selectType = type;
+    object.userData.selectName = name;
+  }
+
+  function isSpace3dSelected(type, name) {
+    return Boolean(space3dSelection && space3dSelection.type === type && space3dSelection.name === name);
+  }
+
+  function handleSpace3dPick(event) {
+    if (!space3d) return;
+    const { canvas, camera, raycaster, pointer, dynamicGroup } = space3d;
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+
+    const hits = raycaster.intersectObjects(dynamicGroup.children, true);
+    let selected = null;
+    let fallbackLine = null;
+    let fallbackPicture = null;
+    for (const hit of hits) {
+      const target = selectableSpace3dObject(hit.object);
+      if (target) {
+        const candidate = {
+          type: target.userData.selectType,
+          name: target.userData.selectName
+        };
+        if (candidate.name === '画面') {
+          if (!fallbackPicture) fallbackPicture = candidate;
+          continue;
+        }
+        if (candidate.type === 'line') {
+          if (!fallbackLine) fallbackLine = candidate;
+          continue;
+        }
+        selected = candidate;
+        break;
+      }
+    }
+    if (!selected) selected = fallbackLine;
+    if (!selected) selected = fallbackPicture;
+
+    space3dSelection = selected;
+    showSpace3dSelectionInfo();
+    if (lastSpace3dPayload) updateSpace3d(lastSpace3dPayload);
+  }
+
+  function selectableSpace3dObject(object) {
+    let current = object;
+    while (current) {
+      if (current.userData && current.userData.selectable) return current;
+      current = current.parent;
+    }
+    return null;
+  }
+
+  function showSpace3dSelectionInfo() {
+    const box = document.getElementById('spaceSelectInfo');
+    if (!box) return;
+    box.innerHTML = space3dSelection ? symbolInfoHtml(space3dSelection.name) : '';
+  }
+
+  function addSpace3dLabel(textValue, position, color, extraClass = '') {
+    if (!SPACE3D_STATE.showLabels) return null;
+    const el = document.createElement('div');
+    el.className = extraClass ? `space-label ${extraClass}` : 'space-label';
+    el.textContent = displaySymbol(textValue);
+    el.style.color = color;
+    space3d.labelLayer.appendChild(el);
+    space3dLabels.push({ el, position: position.clone() });
+  }
+
+  function updateSpace3dLabels() {
+    if (!space3d) return;
+    const { canvas, camera } = space3d;
+    const rect = canvas.getBoundingClientRect();
+    const projected = new THREE.Vector3();
+    for (const item of space3dLabels) {
+      projected.copy(item.position).project(camera);
+      const x = (projected.x * 0.5 + 0.5) * rect.width;
+      const y = (-projected.y * 0.5 + 0.5) * rect.height;
+      const visible = projected.z > -1 && projected.z < 1;
+      item.el.style.display = visible ? 'block' : 'none';
+      item.el.style.left = `${x}px`;
+      item.el.style.top = `${y}px`;
+    }
+  }
+
+  function disposeSpace3dObject(object) {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) {
+      if (object.material.map) object.material.map.dispose();
+      object.material.dispose();
+    }
+  }
+
+  function toThreeColor(color) {
+    return Number.parseInt(color.replace('#', ''), 16);
+  }
+
+  function space3dColorFor(name) {
+    if (name === 'CV' || name === 'P' || name === 'P1' || name === 'P2' || name === 'O' || name === 'Pθ') return SVG_COLORS.green;
+    if (name === 'VP1' || name === "VP1'" || name === 'VPL' || name === 'S1') return SVG_COLORS.blue;
+    if (name === 'VP2' || name === "VP2'" || name === 'VPR') return SVG_COLORS.yellow;
+    if (name === 'VP3') return SVG_COLORS.pink;
+    if (name === 'P(Q1)' || name === 'P(Q2)' || name === "A'" || name === "A''") return SVG_COLORS.half;
+    return SVG_COLORS.black;
+  }
+
+  function clampNumeric(value, min, max) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return min;
+    return Math.max(min, Math.min(max, numeric));
+  }
+
+  function stepDecimals(step) {
+    const text = String(step);
+    if (text.includes('e-')) return Math.max(0, Number(text.split('e-')[1]) || 0);
+    const dot = text.indexOf('.');
+    return dot >= 0 ? Math.min(8, text.length - dot - 1) : 0;
+  }
+
+  function setupFrontControls() {
+    const resetBtn = document.getElementById('frontResetBtn');
+    const labelToggleBtn = document.getElementById('frontLabelToggleBtn');
+    const auxToggleBtn = document.getElementById('frontAuxToggleBtn');
+    const exampleToggleBtn = document.getElementById('frontExampleToggleBtn');
+    const fovSlider = document.getElementById('frontFovSlider');
+    const thetaSlider = document.getElementById('frontThetaSlider');
+    const horizonRotateSlider = document.getElementById('frontHorizonRotateSlider');
+    const heightSlider = document.getElementById('frontHeightSlider');
+    const pConeToggle = document.getElementById('frontPConeToggle');
+    const cvRangeToggle = document.getElementById('frontCvRangeToggle');
+    const roofDeltaSlider = document.getElementById('frontRoofDeltaSlider');
+    const displayModeBtns = document.querySelectorAll('.display-mode-btn');
+    const sliderStepBtns = document.querySelectorAll('.front-step-btn');
+
+    resetBtn.addEventListener('click', () => {
+      Object.assign(FRONT2D_STATE, DEFAULT_FRONT2D_STATE);
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    labelToggleBtn.addEventListener('click', () => {
+      FRONT2D_STATE.showLabels = !FRONT2D_STATE.showLabels;
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    auxToggleBtn.addEventListener('click', () => {
+      FRONT2D_STATE.showAux = !FRONT2D_STATE.showAux;
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    exampleToggleBtn.addEventListener('click', () => {
+      FRONT2D_STATE.showExamples = !FRONT2D_STATE.showExamples;
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    fovSlider.addEventListener('input', () => {
+      FRONT2D_STATE.fovDeg = Number(fovSlider.value);
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    thetaSlider.addEventListener('input', () => {
+      FRONT2D_STATE.thetaDeg = Number(thetaSlider.value);
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    horizonRotateSlider.addEventListener('input', () => {
+      FRONT2D_STATE.horizonRotateDeg = clampNumeric(Number(horizonRotateSlider.value), -180, 180);
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    heightSlider.addEventListener('input', () => {
+      FRONT2D_STATE.heightUnits = clampNumeric(Number(heightSlider.value), 0, 5);
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    roofDeltaSlider.addEventListener('input', () => {
+      FRONT2D_STATE.roofDeltaDeg = Number(roofDeltaSlider.value);
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    pConeToggle.addEventListener('click', () => {
+      FRONT2D_STATE.showPCone = !FRONT2D_STATE.showPCone;
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    cvRangeToggle.addEventListener('click', () => {
+      FRONT2D_STATE.showCvRange = !FRONT2D_STATE.showCvRange;
+      syncFrontControls();
+      drawFront2d();
+    });
+
+    displayModeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        FRONT2D_STATE.displayStage = Number(btn.dataset.stage);
+        syncFrontControls();
+        drawFront2d();
+      });
+    });
+
+    sliderStepBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const slider = document.getElementById(btn.dataset.target);
+        if (!slider) return;
+        const step = Math.abs(Number(slider.step)) || 1;
+        const delta = Number(btn.dataset.delta) || 0;
+        const min = Number.isFinite(Number(slider.min)) ? Number(slider.min) : -Infinity;
+        const max = Number.isFinite(Number(slider.max)) ? Number(slider.max) : Infinity;
+        const current = Number(slider.value) || 0;
+        const decimals = stepDecimals(step);
+        const next = Math.max(min, Math.min(max, current + delta * step));
+        slider.value = String(Number(next.toFixed(decimals)));
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+
+    syncFrontControls();
+  }
+
+  function syncFrontControls() {
+    document.getElementById('frontFovValue').textContent = `FOV ${Math.round(FRONT2D_STATE.fovDeg)}°`;
+    document.getElementById('frontFovSlider').value = FRONT2D_STATE.fovDeg;
+    document.getElementById('frontThetaValue').textContent = `θ ${Math.round(FRONT2D_STATE.thetaDeg)}°`;
+    document.getElementById('frontThetaSlider').value = FRONT2D_STATE.thetaDeg;
+    const horizonRotateValue = clampNumeric(Number(FRONT2D_STATE.horizonRotateDeg), -180, 180);
+    const horizonRotateLabel = document.getElementById('frontHorizonRotateValue');
+    const horizonRotateSlider = document.getElementById('frontHorizonRotateSlider');
+    if (horizonRotateLabel) horizonRotateLabel.textContent = `地平线旋转 ${Math.round(horizonRotateValue)}°`;
+    if (horizonRotateSlider) horizonRotateSlider.value = horizonRotateValue;
+    const heightValue = clampNumeric(Number(FRONT2D_STATE.heightUnits), 0, 5);
+    const heightLabel = document.getElementById('frontHeightValue');
+    const heightSlider = document.getElementById('frontHeightSlider');
+    if (heightLabel) heightLabel.textContent = `高度 ${heightValue.toFixed(1)}`;
+    if (heightSlider) heightSlider.value = heightValue;
+    document.getElementById('frontRoofDeltaValue').textContent = `屋顶δ ${Math.round(FRONT2D_STATE.roofDeltaDeg)}°`;
+    document.getElementById('frontRoofDeltaSlider').value = FRONT2D_STATE.roofDeltaDeg;
+    const pConeBtn = document.getElementById('frontPConeToggle');
+    const cvRangeBtn = document.getElementById('frontCvRangeToggle');
+    if (pConeBtn) {
+      pConeBtn.textContent = FRONT2D_STATE.showPCone ? '隐藏视锥' : '显示视锥';
+      pConeBtn.classList.toggle('is-active', FRONT2D_STATE.showPCone);
+      pConeBtn.setAttribute('aria-pressed', FRONT2D_STATE.showPCone ? 'true' : 'false');
+    }
+    if (cvRangeBtn) {
+      cvRangeBtn.textContent = FRONT2D_STATE.showCvRange ? '隐藏CV范围' : '显示CV范围';
+      cvRangeBtn.classList.toggle('is-active', FRONT2D_STATE.showCvRange);
+      cvRangeBtn.setAttribute('aria-pressed', FRONT2D_STATE.showCvRange ? 'true' : 'false');
+    }
+    document.getElementById('frontLabelToggleBtn').textContent = FRONT2D_STATE.showLabels ? '隐藏标注' : '显示标注';
+    document.getElementById('frontAuxToggleBtn').textContent = FRONT2D_STATE.showAux ? '隐藏辅助线' : '显示辅助线';
+    document.getElementById('frontExampleToggleBtn').textContent = FRONT2D_STATE.showExamples ? '隐藏实物示例' : '显示实物示例';
+    document.querySelectorAll('.display-mode-btn').forEach((btn) => {
+      const active = Number(btn.dataset.stage) === FRONT2D_STATE.displayStage;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+
+  function rotateFrontPointAround(point, pivot, angleDeg) {
+    if (!point || !pivot || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return point;
+    const angle = (Number(angleDeg) || 0) * Math.PI / 180;
+    if (Math.abs(angle) < 1e-12) return { ...point };
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+    return {
+      ...point,
+      x: pivot.x + dx * cos - dy * sin,
+      y: pivot.y + dx * sin + dy * cos
+    };
+  }
+
+  function rotateFrontValueAround(value, pivot, angleDeg) {
+    if (!value || !pivot || !Number.isFinite(Number(angleDeg)) || Math.abs(Number(angleDeg)) < 1e-12) return value;
+    if (Array.isArray(value)) return value.map(item => rotateFrontValueAround(item, pivot, angleDeg));
+    if (typeof value !== 'object') return value;
+    if (Number.isFinite(value.x) && Number.isFinite(value.y)) return rotateFrontPointAround(value, pivot, angleDeg);
+    const result = {};
+    for (const [key, child] of Object.entries(value)) {
+      result[key] = rotateFrontValueAround(child, pivot, angleDeg);
+    }
+    return result;
+  }
+
+  function rotateFrontPayloadAround(payload, pivot, angleDeg) {
+    if (!payload || !pivot || !Number.isFinite(Number(angleDeg)) || Math.abs(Number(angleDeg)) < 1e-12) return payload;
+    return rotateFrontValueAround(payload, pivot, angleDeg);
+  }
+
+  function drawFront2d() {
+    const svg = document.getElementById('front2d');
+    const NS = 'http://www.w3.org/2000/svg';
+
+    const observerGap = Math.max(MIN_P_CV_DISTANCE, FRONT2D_STATE.pY - FRONT2D_STATE.horizonY);
+    const canvasCenter = frontCanvasCenter(svg);
+    // 画面的真正中心固定为 CV；O 只作为视高面/地平线在画面上的交线位置。
+    FRONT2D_STATE.cvX = canvasCenter.x;
+    FRONT2D_STATE.horizonY = canvasCenter.y;
+    FRONT2D_STATE.pY = canvasCenter.y + observerGap;
+    FRONT2D_STATE.p2Distance = Math.max(
+      MIN_P_CV_DISTANCE,
+      Number.isFinite(FRONT2D_STATE.p2Distance) ? FRONT2D_STATE.p2Distance : observerGap
+    );
+
+    const cv = pt(canvasCenter.x, canvasCenter.y);
+    let baseA = pt(FRONT2D_STATE.aX, FRONT2D_STATE.aY);
+    const planObserver = pt(canvasCenter.x, canvasCenter.y + observerGap);
+    let third = threePointGeometry(cv, observerGap);
+    const horizonRotateDeg = clampNumeric(Number(FRONT2D_STATE.horizonRotateDeg), -180, 180);
+    FRONT2D_STATE.horizonRotateDeg = horizonRotateDeg;
+    baseA = clampAnchorAwayFromHorizon(baseA, third, anchorSideSignForThird(third, baseA));
+    const observer = third.pTheta;
+    let rotationAngle = FRONT2D_STATE.vprAngleDeg;
+    let baseGeom = geometryFromRotationAngle(baseA, rotationAngle, cv, planObserver, third);
+    if (!baseGeom) {
+      if (lastFront2dPayload) updateSpace3d(lastFront2dPayload);
+      return;
+    }
+    const heightUnits = clampNumeric(Number(FRONT2D_STATE.heightUnits), 0, 5);
+    const baseSideLength = clamp(baseGeom.projectedSideLength, 8, 320);
+    const lockedAnchorSide = anchorSideSignForThird(third, baseA);
+    let a = elevatedAnchorFromBase(baseA, third, baseSideLength, heightUnits);
+    // 注意：这里不能再 clamp 显示出来的 a。
+    // 拖拽限制应作用在“a 减去高度后的地面基准 baseA”上；高度滑条本身允许把显示 a 推过 VP1-VP2。
+    let geom = geometryFromRotationAngle(a, rotationAngle, cv, planObserver, third, baseSideLength, {
+      allowHorizonCrossing: true,
+      lockSideSign: lockedAnchorSide
+    });
+    if (!geom) {
+      geom = baseGeom;
+      a = baseGeom.cube.a;
+    }
+    FRONT2D_STATE.aX = baseA.x;
+    FRONT2D_STATE.aY = baseA.y;
+    FRONT2D_STATE.vprAngleDeg = rotationAngle;
+    FRONT2D_STATE.pY = planObserver.y;
+    FRONT2D_STATE.heightUnits = heightUnits;
+    FRONT2D_STATE.cubeSize = geom.projectedSideLength;
+    const { vpCircle, vpl, vpr, q1, q2, e, f, s, t, y, cube } = geom;
+    a = cube.a;
+    const { b, c, d, A, B, C, D } = cube;
+    // D 点拖拽只表示绕 aA 基准线旋转；三点透视里 aA 朝 VP3 倾斜，但画面长度必须锁定。
+    // 同一次 D 拖拽中，所有候选角度都用这个固定长度计算，避免 aA 被灭点关系顺手缩放。
+    const dDragLockedSideLength = clamp(distance(a, A), 8, 320);
+    const q1CvOverlap = false;
+    const q2CvOverlap = false;
+    const vpCvOverlap = false;
+    const roof = roofGeometry(cube, q1, vpl, q2, vpr);
+    const baseRoof = roofGeometry(baseGeom.cube, baseGeom.q1, baseGeom.vpl, baseGeom.q2, baseGeom.vpr);
+    const displayStage = FRONT2D_STATE.displayStage;
+    const ground = geom.ground || groundConstruction(vpl, vpr, third);
+    const horizontalObserver = ground.p2;
+    // 传给三维空间的仍然是未旋转的局部透视坐标；三维映射层根据 horizonRotateDeg
+    // 绕视线法线旋转画面坐标轴。这样二维显示旋转和三维透视重建不会重复旋转。
+    const frontPayload = { cv, observer, planObserver: horizontalObserver, o: third.o, vp3: third.vp3, ground, vpl, vpr, q1, q2, e, f, s, t, y, a, A, cube, roof, third, baseA, baseCube: baseGeom.cube, baseRoof, heightUnits, horizonRotateDeg };
+    lastFront2dPayload = frontPayload;
+    updateSpace3d(frontPayload);
+
+    clear(svg);
+    const frontLayer = document.createElementNS(NS, 'g');
+    if (Math.abs(horizonRotateDeg) > 1e-9) {
+      frontLayer.setAttribute('transform', `rotate(${horizonRotateDeg} ${third.o.x} ${third.o.y})`);
+    }
+    svg.appendChild(frontLayer);
+    if (displayStage >= 4) drawExampleBackground(frontLayer, { horizonY: third.o.y });
+    drawPConeOverlay(frontLayer, { cv, observer });
+    if (displayStage < 4) {
+      drawDisplayStage(frontLayer, { cv, observer, planObserver: horizontalObserver, ground, vpl, vpr, q1, q2, a, A, roof, third });
+      drawCvRangeMask(frontLayer, { cv, observer });
+      return;
+    }
+    if (FRONT2D_STATE.showAux) {
+      circle(frontLayer, vpCircle.center, vpCircle.radius, 'none', SVG_COLORS.horizon, 0.8);
+      circle(frontLayer, third.circle.center, third.circle.radius, 'none', SVG_COLORS.horizon, 0.8);
+      circle(frontLayer, ground.circle.center, ground.circle.radius, 'none', SVG_COLORS.horizon, 0.8);
+      line(frontLayer, pt(-5000, third.o.y), pt(5000, third.o.y), SVG_COLORS.horizon, 0.7);
+      line(frontLayer, third.o, third.vp3, SVG_COLORS.green, 0.9);
+      drawFrontPictureFrame(frontLayer, vpl, vpr, cv);
+    }
+    line(frontLayer, vpl, vpr, SVG_COLORS.black, 1.1);
+    if (FRONT2D_STATE.showAux) {
+      line(frontLayer, cv, observer, SVG_COLORS.green, 1);
+      line(frontLayer, third.pTheta, third.o, SVG_COLORS.orange, 1);
+      line(frontLayer, third.pTheta, third.vp3, SVG_COLORS.purple, 1);
+      line(frontLayer, horizontalObserver, vpl, SVG_COLORS.blue, 1);
+      line(frontLayer, horizontalObserver, vpr, SVG_COLORS.yellow, 1);
+    }
+
+    if (FRONT2D_STATE.showAux) {
+      for (const p of Object.values(cube)) {
+        line(frontLayer, vpl, p, SVG_COLORS.pink, 0.75);
+        line(frontLayer, vpr, p, SVG_COLORS.pink, 0.75);
+      }
+      for (const p of [cube.a, cube.A, cube.b, cube.B, cube.c, cube.C, cube.d, cube.D]) {
+        line(frontLayer, third.vp3, p, SVG_COLORS.pink, 0.75);
+      }
+    }
+
+    if (FRONT2D_STATE.showAux) {
+      line(frontLayer, vpl, pt(vpl.x, 65), SVG_COLORS.blue, 1.6);
+      line(frontLayer, vpr, pt(vpr.x, 65), SVG_COLORS.yellow, 1.6);
+      if (s && t && y) {
+        line(frontLayer, third.vp3, y, SVG_COLORS.green, 0.9);
+        line(frontLayer, y, s, SVG_COLORS.green, 0.9);
+        line(frontLayer, A, s, SVG_COLORS.orange, 1);
+        line(frontLayer, A, t, SVG_COLORS.orange, 1);
+        line(frontLayer, s, q1, SVG_COLORS.half, 0.9);
+        line(frontLayer, t, q2, SVG_COLORS.half, 0.9);
+      }
+    }
+
+    const visibleEdgeKeys = visibleCubeEdgeKeys(cube);
+    const blockedEdges = [];
+    const visibleEdges = [];
+    for (const [from, to] of CUBE_EDGES) {
+      const hidden = !visibleEdgeKeys.has(edgeKey(from, to));
+      (hidden ? blockedEdges : visibleEdges).push([from, to]);
+    }
+
+    for (const [from, to] of blockedEdges) {
+      line(frontLayer, cube[from], cube[to], SVG_COLORS.gray, 2.6);
+    }
+    for (const [from, to] of visibleEdges) {
+      line(frontLayer, cube[from], cube[to], SVG_COLORS.black, 3);
+    }
+    drawRealExamples(frontLayer, { cv, observer, ground, vpl, vpr, q1, q2, e, f, roof, third });
+
+    if (!vpCvOverlap) {
+      point(frontLayer, vpl, SVG_COLORS.blue, 5, 'VP1');
+      point(frontLayer, vpr, SVG_COLORS.yellow, 5, 'VP2');
+      dragHandle(frontLayer, vpl, 13, onVplDrag, 'VP1');
+      dragHandle(frontLayer, vpr, 13, onVprDrag, 'VP2');
+    }
+    point(frontLayer, third.o, SVG_COLORS.green, 4, 'O');
+    dragHandle(frontLayer, third.o, 13, onODrag, 'O');
+    point(frontLayer, third.vp3, SVG_COLORS.pink, 5, 'VP3');
+    dragHandle(frontLayer, third.vp3, 13, onVp3Drag, 'VP3');
+    point(frontLayer, cv, SVG_COLORS.green, 5, 'CV');
+    dragHandle(frontLayer, cv, 13, onCvDrag, 'CV');
+    point(frontLayer, observer, SVG_COLORS.green, 5, 'P1');
+    dragHandle(frontLayer, observer, 13, onPDrag, 'P1');
+    point(frontLayer, ground.p2, SVG_COLORS.green, 5, 'P2');
+    dragHandle(frontLayer, ground.p2, 13, onP2Drag, 'P2');
+    if (FRONT2D_STATE.showAux) {
+      if (!q1CvOverlap) point(frontLayer, q1, SVG_COLORS.half, 3, 'P(Q1)');
+      if (!q2CvOverlap) point(frontLayer, q2, SVG_COLORS.half, 3, 'P(Q2)');
+    }
+    point(frontLayer, a, SVG_COLORS.black, 5, 'a');
+    point(frontLayer, A, SVG_COLORS.black, 5, 'A');
+    point(frontLayer, D, SVG_COLORS.black, 5, 'D');
+    if (FRONT2D_STATE.showAux && s && t && y) {
+      point(frontLayer, s, SVG_COLORS.orange, 4, 'S');
+      point(frontLayer, t, SVG_COLORS.orange, 4, 'T');
+      point(frontLayer, y, SVG_COLORS.green, 4, 'Y');
+    }
+
+    if (FRONT2D_STATE.showLabels) {
+      if (!vpCvOverlap) {
+        label(frontLayer, 'VP1', vpl, SVG_COLORS.blue);
+        label(frontLayer, 'VP2', vpr, SVG_COLORS.yellow);
+      }
+      label(frontLayer, 'O', third.o, SVG_COLORS.green);
+      label(frontLayer, 'VP3', third.vp3, SVG_COLORS.pink);
+      label(frontLayer, vpCvOverlap ? 'CV(VP)' : 'CV', cv, SVG_COLORS.green);
+      label(frontLayer, 'P1', observer, SVG_COLORS.green);
+      label(frontLayer, 'P2', ground.p2, SVG_COLORS.green);
+      if (FRONT2D_STATE.showAux) {
+        if (!q1CvOverlap) label(frontLayer, 'P(Q1)', q1, SVG_COLORS.half);
+        if (!q2CvOverlap) label(frontLayer, 'P(Q2)', q2, SVG_COLORS.half);
+        if (s && t && y) {
+          label(frontLayer, 'S', s, SVG_COLORS.orange);
+          label(frontLayer, 'T', t, SVG_COLORS.orange);
+          label(frontLayer, 'Y', y, SVG_COLORS.green);
+        }
+      }
+    }
+
+    if (FRONT2D_STATE.showLabels) {
+      for (const [name, p] of Object.entries(cube)) {
+        label(frontLayer, name, p, SVG_COLORS.black);
+      }
+      if (s && t && y) {
+        drawAngleLabel(frontLayer, 'β', A, s, B, SVG_COLORS.yellow, 24);
+        drawAngleLabel(frontLayer, 'α', A, C, t, SVG_COLORS.blue, 24);
+      }
+      drawAngleLabel(frontLayer, 'θ', third.pTheta, cv, third.o, SVG_COLORS.green, 18);
+    }
+    dragHandle(frontLayer, a, 13, onADrag, 'a');
+    dragHandle(frontLayer, A, 13, onUpperADrag, 'A');
+    dragHandle(frontLayer, D, 13, onDDrag, 'D');
+    drawCvRangeMask(frontLayer, { cv, observer });
+
+    function pt(x, y) {
+      return { x, y };
+    }
+
+    function frontCanvasCenter(svgNode) {
+      const box = svgNode && svgNode.viewBox && svgNode.viewBox.baseVal;
+      if (!box || !Number.isFinite(box.width) || !Number.isFinite(box.height)) {
+        return pt(350, 260);
+      }
+      return pt(box.x + box.width / 2, box.y + box.height / 2);
+    }
+
+    function pitchOffsetY(distanceValue) {
+      const thetaDeg = clamp(Number.isFinite(FRONT2D_STATE.thetaDeg) ? FRONT2D_STATE.thetaDeg : 35, -89, 89);
+      const safeThetaDeg = Math.abs(thetaDeg) < 1 ? (thetaDeg < 0 ? -1 : 1) : thetaDeg;
+      return Math.tan(safeThetaDeg * Math.PI / 180) * Math.max(MIN_P_CV_DISTANCE, distanceValue);
+    }
+
+    function lerp(p, q, t) {
+      return pt(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t);
+    }
+
+    function distance(p, q) {
+      return Math.hypot(p.x - q.x, p.y - q.y);
+    }
+
+    function pointsOverlap(p, q, epsilon) {
+      return distance(p, q) <= epsilon;
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function anchorSideSignForThird(thirdGeometry, anchorPoint = null) {
+      if (thirdGeometry && anchorPoint && Number.isFinite(anchorPoint.y) && thirdGeometry.o && Number.isFinite(thirdGeometry.o.y)) {
+        const currentSign = Math.sign(anchorPoint.y - thirdGeometry.o.y);
+        if (currentSign !== 0) return currentSign;
+      }
+      if (thirdGeometry && thirdGeometry.vp3 && thirdGeometry.o) {
+        const vp3Side = Math.sign(thirdGeometry.vp3.y - thirdGeometry.o.y);
+        if (vp3Side !== 0) return vp3Side;
+      }
+      return thirdGeometry && thirdGeometry.viewSign ? thirdGeometry.viewSign : 1;
+    }
+
+    function clampAnchorAwayFromHorizon(anchorPoint, thirdGeometry, sideSign = null) {
+      if (!anchorPoint || !thirdGeometry || !thirdGeometry.o || !Number.isFinite(thirdGeometry.o.y)) return anchorPoint;
+      const sign = sideSign || anchorSideSignForThird(thirdGeometry, anchorPoint);
+      const horizonY = thirdGeometry.o.y;
+      const safeY = sign < 0
+        ? Math.min(anchorPoint.y, horizonY - MIN_A_HORIZON_DISTANCE)
+        : Math.max(anchorPoint.y, horizonY + MIN_A_HORIZON_DISTANCE);
+      return pt(anchorPoint.x, safeY);
+    }
+
+    function lowerCirclePoint(boundary, x) {
+      const safeX = clamp(x, boundary.center.x - boundary.radius, boundary.center.x + boundary.radius);
+      const dy = Math.sqrt(Math.max(0, boundary.radius ** 2 - (safeX - boundary.center.x) ** 2));
+      return pt(safeX, boundary.center.y + dy);
+    }
+
+    function threePointGeometry(cvPoint, observerDistance) {
+      const dx = Math.max(MIN_P_CV_DISTANCE, observerDistance || 220);
+      const thetaDeg = clamp(Number.isFinite(FRONT2D_STATE.thetaDeg) ? FRONT2D_STATE.thetaDeg : 35, -89, 89);
+      const safeThetaDeg = Math.abs(thetaDeg) < 1 ? (thetaDeg < 0 ? -1 : 1) : thetaDeg;
+      const theta = safeThetaDeg * Math.PI / 180;
+      const tangent = Math.tan(theta);
+      const sign = safeThetaDeg < 0 ? -1 : 1;
+      const pTheta = pt(cvPoint.x + dx, cvPoint.y);
+      const oPoint = pt(cvPoint.x, cvPoint.y - tangent * dx);
+      const vp3Y = cvPoint.y + dx / tangent;
+      const vp3Point = pt(cvPoint.x, vp3Y);
+      return {
+        cv: cvPoint,
+        o: oPoint,
+        vp3: vp3Point,
+        pTheta,
+        thetaDeg,
+        viewSign: sign,
+        circle: {
+          center: pt(cvPoint.x, (oPoint.y + vp3Point.y) / 2),
+          radius: Math.abs(vp3Point.y - oPoint.y) / 2
+        }
+      };
+    }
+
+    function groundConstruction(vp1Point, vp2Point, third) {
+      const vp1Prime = pt(vp1Point.x, vp1Point.y);
+      const vp2Prime = pt(vp2Point.x, vp2Point.y);
+      const center = pt((vp1Prime.x + vp2Prime.x) / 2, third.o.y);
+      const radius = Math.abs(vp2Prime.x - vp1Prime.x) / 2;
+      const dx = third.o.x - center.x;
+      const dy = Math.sqrt(Math.max(0, radius ** 2 - dx ** 2));
+      const towardVp3 = Math.sign(third.vp3.y - third.o.y) || 1;
+      return {
+        vp1Prime,
+        vp2Prime,
+        p2: pt(third.o.x, third.o.y + towardVp3 * dy),
+        circle: { center, radius }
+      };
+    }
+
+    function groundObserverGap(fallbackGap) {
+      const value = Number.isFinite(FRONT2D_STATE.p2Distance) ? FRONT2D_STATE.p2Distance : fallbackGap;
+      return Math.max(MIN_P_CV_DISTANCE, value || MIN_P_CV_DISTANCE);
+    }
+
+    function geometryFromRotationAngle(anchor, angleDeg, cvPoint, observerPoint, third = threePointGeometry(cvPoint), forcedProjectedSideLength = null, options = null) {
+      const angleRad = clamp(angleDeg, 1, 89) * Math.PI / 180;
+      const horizonY = third.o.y;
+      const allowHorizonCrossing = Boolean(options && options.allowHorizonCrossing);
+      const sideSign = Number.isFinite(options && options.lockSideSign)
+        ? options.lockSideSign
+        : anchorSideSignForThird(third, anchor);
+      const safeAnchor = allowHorizonCrossing
+        ? pt(anchor.x, anchor.y)
+        : clampAnchorAwayFromHorizon(anchor, third, sideSign);
+      const horizonGap = Math.max(MIN_A_HORIZON_DISTANCE, Math.abs(safeAnchor.y - horizonY));
+      const layoutAnchor = pt(safeAnchor.x, horizonY + sideSign * horizonGap);
+      const observerGap = Math.max(1, observerPoint.y - FRONT2D_STATE.horizonY);
+      const p2Gap = groundObserverGap(observerGap);
+      const rightVpGap = Math.max(4, p2Gap / Math.tan(angleRad));
+      const vprX = cvPoint.x + rightVpGap;
+      const vprPoint = pt(vprX, horizonY);
+      if (!isFinitePoint(vprPoint)) return null;
+
+      const vplX = cvPoint.x - p2Gap ** 2 / rightVpGap;
+      const vplPoint = pt(vplX, horizonY);
+      if (!isFinitePoint(vplPoint)) return null;
+
+      const circleCenter = pt((vplPoint.x + vprPoint.x) / 2, horizonY);
+      const circle = {
+        center: circleCenter,
+        radius: Math.abs(vprPoint.x - vplPoint.x) / 2
+      };
+      const ground = groundConstruction(vplPoint, vprPoint, third);
+      const horizontalObserver = ground.p2;
+      let q1Point = pt(vplPoint.x + distance(horizontalObserver, vplPoint), horizonY);
+      let q2Point = pt(vprPoint.x - distance(horizontalObserver, vprPoint), horizonY);
+      // a 是二维画面中的基准下角点。拖拽 a 时，VP1/VP2/VP3/P2 不动；拖拽 P2 时，圆整体按 O 为基准等比缩放。
+      // 三点透视的竖向量距点必须先由 VP3-P1 旋到 VP3 水平线得到：VP3P1 = VP3Y。
+      // 再用 a-Y 与过 A 的水平线交出 S，S-Q1 与 A-VP1 交出 B，之后继续推出其余点。
+      const aPoint = safeAnchor;
+      const sideLength = Number.isFinite(forcedProjectedSideLength)
+        ? clamp(forcedProjectedSideLength, 8, 320)
+        : projectedSideLengthAtAnchor(aPoint, vplPoint, vprPoint, third);
+      const APoint = verticalTopPoint(aPoint, third.vp3, sideLength, third.viewSign);
+      const measure = verticalMeasureConstruction(third.vp3, third.pTheta, aPoint, APoint, vplPoint, q1Point);
+      if (!measure) return null;
+      const yPoint = measure.y;
+      const sPoint = measure.s;
+      const BPoint = measure.B;
+
+      const saLength = Math.max(1, Math.abs(APoint.x - sPoint.x));
+      const tPoint = pt(APoint.x + saLength, APoint.y);
+      const CPoint = intersect(tPoint, q2Point, APoint, vprPoint);
+      if (!isFinitePoint(CPoint)) return null;
+
+      const DPoint = intersect(BPoint, vprPoint, CPoint, vplPoint);
+      if (!isFinitePoint(DPoint)) return null;
+
+      const bPoint = intersect(aPoint, vplPoint, BPoint, third.vp3);
+      const cPoint = intersect(aPoint, vprPoint, CPoint, third.vp3);
+      if (!isFinitePoint(bPoint) || !isFinitePoint(cPoint)) return null;
+
+      const dFromB = intersect(bPoint, vprPoint, DPoint, third.vp3);
+      const dFromC = intersect(cPoint, vplPoint, DPoint, third.vp3);
+      if (!isFinitePoint(dFromB) || !isFinitePoint(dFromC)) return null;
+      const dPoint = pt((dFromB.x + dFromC.x) / 2, (dFromB.y + dFromC.y) / 2);
+      const points = {
+        a: aPoint,
+        b: bPoint,
+        c: cPoint,
+        d: dPoint,
+        A: APoint,
+        B: BPoint,
+        C: CPoint,
+        D: DPoint
+      };
+      for (const point of Object.values(points)) {
+        if (!isFinitePoint(point)) return null;
+      }
+      return {
+        vpCircle: circle,
+        vpl: vplPoint,
+        vpr: vprPoint,
+        q1: q1Point,
+        q2: q2Point,
+        e: sPoint,
+        f: tPoint,
+        s: sPoint,
+        t: tPoint,
+        y: yPoint,
+        ground,
+        cube: points,
+        projectedSideLength: sideLength,
+        third
+      };
+    }
+
+    function horizontalLineWithLine(y, p, q) {
+      const dy = q.y - p.y;
+      if (Math.abs(dy) < 1e-9) return pt(NaN, NaN);
+      const u = (y - p.y) / dy;
+      return pt(p.x + (q.x - p.x) * u, y);
+    }
+
+    function verticalMeasureConstruction(vp3Point, p1Point, aPoint, APoint, vplPoint, q1Point) {
+      const radius = Math.max(1, distance(vp3Point, p1Point));
+      const candidates = [
+        pt(vp3Point.x + radius, vp3Point.y),
+        pt(vp3Point.x - radius, vp3Point.y)
+      ];
+      let best = null;
+      let bestScore = Infinity;
+      for (const yPoint of candidates) {
+        const sPoint = horizontalLineWithLine(APoint.y, aPoint, yPoint);
+        if (!isFinitePoint(sPoint)) continue;
+        const BPoint = intersect(APoint, vplPoint, sPoint, q1Point);
+        if (!isFinitePoint(BPoint)) continue;
+
+        const towardVp1 =
+          (BPoint.x - APoint.x) * (vplPoint.x - APoint.x) +
+          (BPoint.y - APoint.y) * (vplPoint.y - APoint.y);
+        const towardScore = towardVp1 >= -1e-6 ? 0 : 1000000;
+        const leftMeasureScore = sPoint.x <= APoint.x ? 0 : 100000;
+        const compactScore = distance(APoint, BPoint) + 0.05 * distance(APoint, sPoint);
+        const score = towardScore + leftMeasureScore + compactScore;
+        if (score < bestScore) {
+          bestScore = score;
+          best = { y: yPoint, s: sPoint, B: BPoint };
+        }
+      }
+      return best;
+    }
+
+    function horizontalRotationPoint(vp3Point, p1Point, APoint, sPoint, sideLength) {
+      const radius = Math.max(1, distance(vp3Point, p1Point));
+      const candidates = [
+        pt(vp3Point.x + radius, vp3Point.y),
+        pt(vp3Point.x - radius, vp3Point.y)
+      ];
+      let best = null;
+      let bestScore = Infinity;
+      for (const yPoint of candidates) {
+        const aPoint = intersect(sPoint, yPoint, APoint, vp3Point);
+        if (!isFinitePoint(aPoint)) continue;
+        const towardVp3 =
+          (aPoint.x - APoint.x) * (vp3Point.x - APoint.x) +
+          (aPoint.y - APoint.y) * (vp3Point.y - APoint.y);
+        const sideScore = towardVp3 > 0 ? 0 : 100000;
+        const lengthScore = Math.abs(distance(APoint, aPoint) - sideLength);
+        const score = sideScore + lengthScore;
+        if (score < bestScore) {
+          bestScore = score;
+          best = { y: yPoint, a: aPoint };
+        }
+      }
+      return best;
+    }
+
+    function pointAwayFrom(from, vanishingPoint, lengthValue) {
+      const dx = from.x - vanishingPoint.x;
+      const dy = from.y - vanishingPoint.y;
+      const n = Math.hypot(dx, dy);
+      if (n < 1e-9) return pt(from.x, from.y - lengthValue);
+      return pt(from.x + dx / n * lengthValue, from.y + dy / n * lengthValue);
+    }
+
+    function pointTowardVp(from, targetPoint, lengthValue) {
+      const dx = targetPoint.x - from.x;
+      const dy = targetPoint.y - from.y;
+      const n = Math.hypot(dx, dy);
+      if (n < 1e-9) return pt(from.x, from.y - lengthValue);
+      return pt(from.x + dx / n * lengthValue, from.y + dy / n * lengthValue);
+    }
+
+    function verticalTopPoint(from, vp3Point, lengthValue, viewSign) {
+      return viewSign < 0
+        ? pointTowardVp(from, vp3Point, lengthValue)
+        : pointAwayFrom(from, vp3Point, lengthValue);
+    }
+
+    function verticalBottomPoint(from, vp3Point, lengthValue, viewSign) {
+      return viewSign < 0
+        ? pointAwayFrom(from, vp3Point, lengthValue)
+        : pointTowardVp(from, vp3Point, lengthValue);
+    }
+
+    function elevatedAnchorFromBase(basePoint, thirdGeometry, sideLength, heightUnits) {
+      const h = clampNumeric(Number(heightUnits), 0, 5);
+      if (!h) return pt(basePoint.x, basePoint.y);
+      return verticalTopPoint(basePoint, thirdGeometry.vp3, sideLength * h, thirdGeometry.viewSign);
+    }
+
+    function baseAnchorFromElevated(elevatedPoint, thirdGeometry, sideLength, heightUnits) {
+      const h = clampNumeric(Number(heightUnits), 0, 5);
+      if (!h) return pt(elevatedPoint.x, elevatedPoint.y);
+      return verticalBottomPoint(elevatedPoint, thirdGeometry.vp3, sideLength * h, thirdGeometry.viewSign);
+    }
+
+    function frontGroundZForThreePoint(vplPoint, vprPoint, thirdGeometry, anchorPoint) {
+      const frame = frontPictureFrameBounds(vplPoint, vprPoint, thirdGeometry.cv || thirdGeometry.o);
+      const sideSign = anchorPoint.y < thirdGeometry.o.y ? -1 : 1;
+      const edgeY = sideSign < 0 ? frame.top : frame.bottom;
+      return Math.max(1, Math.abs(edgeY - thirdGeometry.o.y));
+    }
+
+    function projectedSideLengthAtAnchor(anchorPoint, vplPoint, vprPoint, thirdGeometry) {
+      const groundZ = frontGroundZForThreePoint(vplPoint, vprPoint, thirdGeometry, anchorPoint);
+      const anchorZ = Math.max(1, Math.abs(anchorPoint.y - thirdGeometry.o.y));
+      if (!Number.isFinite(FRONT2D_STATE.cubeTrueSize)) {
+        FRONT2D_STATE.cubeTrueSize = Math.max(1, FRONT2D_STATE.cubeSize) * groundZ / anchorZ;
+      }
+      const projectedLength = anchorZ * FRONT2D_STATE.cubeTrueSize / groundZ;
+      return clamp(projectedLength, 8, 320);
+    }
+
+    function projectedVerticalLengthFromDrag(basePoint, dragPoint, vp3Point, viewSign) {
+      const topPoint = verticalTopPoint(basePoint, vp3Point, 1, viewSign);
+      const dx = topPoint.x - basePoint.x;
+      const dy = topPoint.y - basePoint.y;
+      const n = Math.hypot(dx, dy);
+      if (n < 1e-9) return clamp(distance(basePoint, dragPoint), 8, 320);
+      const projected = (dragPoint.x - basePoint.x) * dx / n + (dragPoint.y - basePoint.y) * dy / n;
+      return clamp(projected, 8, 320);
+    }
+
+    function drawFrontPictureFrame(parent, vplPoint, vprPoint, centerPoint) {
+      const frame = frontPictureFrameBounds(vplPoint, vprPoint, centerPoint);
+      const corners = [
+        pt(frame.left, frame.top),
+        pt(frame.right, frame.top),
+        pt(frame.right, frame.bottom),
+        pt(frame.left, frame.bottom)
+      ];
+      for (let i = 0; i < corners.length; i++) {
+        const edge = line(parent, corners[i], corners[(i + 1) % corners.length], SVG_COLORS.gray, 1.5);
+        edge.style.pointerEvents = 'none';
+      }
+    }
+
+    function frontPictureFrameBounds(vplPoint, vprPoint, centerPoint = null) {
+      const span = Math.max(1, distance(vplPoint, vprPoint));
+      const center = centerPoint || pt((vplPoint.x + vprPoint.x) / 2, (vplPoint.y + vprPoint.y) / 2);
+      const size = Math.max(
+        span,
+        distance(center, vplPoint) * 2,
+        distance(center, vprPoint) * 2
+      ) * 1.12;
+      const half = size / 2;
+      return {
+        left: center.x - half,
+        right: center.x + half,
+        top: center.y - half,
+        bottom: center.y + half,
+        width: size,
+        height: size
+      };
+    }
+
+    function nearestValidRotationAngle(anchor, desiredAngle, cvPoint, observerPoint, thirdGeometry = third, forcedProjectedSideLength = null) {
+      const desired = clamp(desiredAngle, 1, 89);
+      if (isValidRotationAngle(anchor, desired, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) return desired;
+
+      for (let offset = 0.25; offset < 88; offset += 0.25) {
+        const lower = desired - offset;
+        if (lower >= 1 && isValidRotationAngle(anchor, lower, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) return lower;
+
+        const upper = desired + offset;
+        if (upper < 89 && isValidRotationAngle(anchor, upper, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) return upper;
+      }
+      return desired;
+    }
+
+    function isValidRotationAngle(anchor, angle, cvPoint, observerPoint, thirdGeometry = third, forcedProjectedSideLength = null) {
+      return Boolean(geometryFromRotationAngle(anchor, angle, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength));
+    }
+
+    function clampPointToCircle(p, boundary, margin) {
+      const maxRadius = Math.max(1, boundary.radius - margin);
+      const dx = p.x - boundary.center.x;
+      const dy = p.y - boundary.center.y;
+      const length = Math.hypot(dx, dy);
+      if (length <= maxRadius) return p;
+      return pt(
+        boundary.center.x + dx / length * maxRadius,
+        boundary.center.y + dy / length * maxRadius
+      );
+    }
+
+    function clampAnchorPoint(p, boundary, margin) {
+      return clampPointToCircle(p, boundary, margin);
+    }
+
+    function svgPointFromEvent(event) {
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const rawPoint = point.matrixTransform(svg.getScreenCTM().inverse());
+      const basePoint = { x: rawPoint.x, y: rawPoint.y };
+      return Math.abs(horizonRotateDeg) > 1e-9
+        ? rotateFrontPointAround(basePoint, third.o, -horizonRotateDeg)
+        : basePoint;
+    }
+
+    function onCvDrag(event) {
+      const p = svgPointFromEvent(event);
+      const x = clamp(p.x, vpl.x + 1, vpr.x - 1);
+      FRONT2D_STATE.cvX = x;
+      drawFront2d();
+    }
+
+    function onPDrag(event) {
+      const p = svgPointFromEvent(event);
+      const nextGap = clamp(p.x - cv.x, MIN_P_CV_DISTANCE, 520);
+      const nextPY = FRONT2D_STATE.horizonY + nextGap;
+      FRONT2D_STATE.pY = nextPY;
+      drawFront2d();
+    }
+
+    function onVplDrag(event) {
+      const p = svgPointFromEvent(event);
+      const fallbackGap = Math.max(1, planObserver.y - FRONT2D_STATE.horizonY);
+      const p2Gap = groundObserverGap(fallbackGap);
+      const leftGap = Math.max(4, cv.x - p.x);
+      const nextVprX = cv.x + p2Gap ** 2 / leftGap;
+      setVprX(nextVprX, planObserver);
+      drawFront2d();
+    }
+
+    function onVprDrag(event) {
+      const p = svgPointFromEvent(event);
+      const rightGap = Math.max(4, p.x - cv.x);
+      setVprX(cv.x + rightGap, planObserver);
+      drawFront2d();
+    }
+
+    function setVprX(vprX, observerPoint) {
+      const angle = angleForVprX(Math.max(cv.x + 4, vprX));
+      // 旋转有效性也以地面基准 baseA 为准，避免高度后的显示 a 越线时误判。
+      FRONT2D_STATE.vprAngleDeg = nearestValidRotationAngle(baseA || a, angle, cv, observerPoint, third);
+    }
+
+    function angleForVprX(vprX) {
+      const fallbackGap = Math.max(1, planObserver.y - FRONT2D_STATE.horizonY);
+      const horizonGap = groundObserverGap(fallbackGap);
+      const xGap = Math.max(1, vprX - cv.x);
+      return clamp(Math.atan2(horizonGap, xGap) * 180 / Math.PI, 1, 89);
+    }
+
+    function onP2Drag(event) {
+      const p = svgPointFromEvent(event);
+      const towardVp3 = Math.sign(third.vp3.y - third.o.y) || 1;
+      const rawDistance = towardVp3 * (p.y - third.o.y);
+      const frame = frontPictureFrameBounds(vpl, vpr, cv);
+      const frameDistance = Math.max(
+        Math.abs(frame.top - third.o.y),
+        Math.abs(frame.bottom - third.o.y),
+        MIN_P_CV_DISTANCE
+      );
+      FRONT2D_STATE.p2Distance = clamp(rawDistance, MIN_P_CV_DISTANCE, Math.max(520, frameDistance * 2.2));
+      drawFront2d();
+    }
+
+    function onADrag(event) {
+      const p = svgPointFromEvent(event);
+      const lockedSide = anchorSideSignForThird(third, baseA || a);
+      // 用户拖的是“显示 a”；真正需要防越线的是减去高度后的 baseA。
+      // 因此不能先把显示 a clamp 到 VP1-VP2 一侧，否则高度导致的越线会被错误禁止。
+      const targetElevated = p;
+      const basePoint = baseAnchorFromElevated(targetElevated, third, dDragLockedSideLength, FRONT2D_STATE.heightUnits);
+      const safePoint = clampAnchorAwayFromHorizon(basePoint, third, lockedSide);
+      FRONT2D_STATE.aX = safePoint.x;
+      FRONT2D_STATE.aY = safePoint.y;
+      drawFront2d();
+    }
+
+    function onUpperADrag(event) {
+      const p = svgPointFromEvent(event);
+      const projectedSize = projectedVerticalLengthFromDrag(a, p, third.vp3, third.viewSign);
+      const groundZ = frontGroundZForThreePoint(vpl, vpr, third, a);
+      const anchorZ = Math.max(1, Math.abs(a.y - third.o.y));
+      FRONT2D_STATE.cubeTrueSize = projectedSize * groundZ / anchorZ;
+      FRONT2D_STATE.cubeSize = projectedSize;
+      drawFront2d();
+    }
+
+    function onODrag(event) {
+      const p = svgPointFromEvent(event);
+      const gap = Math.max(MIN_P_CV_DISTANCE, planObserver.y - FRONT2D_STATE.horizonY);
+      const sign = FRONT2D_STATE.thetaDeg < 0 ? -1 : 1;
+      const rise = clamp(sign * (cv.y - p.y), 8, gap * Math.tan(80 * Math.PI / 180));
+      FRONT2D_STATE.thetaDeg = sign * clamp(Math.atan2(rise, gap) * 180 / Math.PI, 1, 89);
+      syncFrontControls();
+      drawFront2d();
+    }
+
+    function onVp3Drag(event) {
+      const p = svgPointFromEvent(event);
+      const gap = Math.max(MIN_P_CV_DISTANCE, planObserver.y - FRONT2D_STATE.horizonY);
+      const sign = FRONT2D_STATE.thetaDeg < 0 ? -1 : 1;
+      const fall = clamp(sign * (p.y - cv.y), gap / Math.tan(80 * Math.PI / 180), gap / Math.tan(5 * Math.PI / 180));
+      FRONT2D_STATE.thetaDeg = sign * clamp(Math.atan2(gap, fall) * 180 / Math.PI, 1, 89);
+      syncFrontControls();
+      drawFront2d();
+    }
+
+    function onDDrag(event) {
+      const target = svgPointFromEvent(event);
+      const lockedSideLength = dDragLockedSideLength;
+      const angle = angleForNearestD(target, lockedSideLength);
+      const nextGeom = geometryFromRotationAngle(a, angle, cv, planObserver, third, lockedSideLength);
+      if (!nextGeom) return;
+
+      FRONT2D_STATE.vprAngleDeg = angle;
+      FRONT2D_STATE.cubeSize = lockedSideLength;
+      FRONT2D_STATE.cubeTrueSize = trueSizeForProjectedSideLength(a, nextGeom.vpl, nextGeom.vpr, third, lockedSideLength);
+      drawFront2d();
+    }
+
+    function angleForNearestD(target, lockedSideLength) {
+      const interval = validRotationInterval(a, FRONT2D_STATE.vprAngleDeg, cv, planObserver, third, lockedSideLength);
+      if (!interval) return FRONT2D_STATE.vprAngleDeg;
+
+      const coarseCount = 24;
+      const step = (interval.max - interval.min) / coarseCount;
+      let bestAngle = clamp(FRONT2D_STATE.vprAngleDeg, interval.min, interval.max);
+      let bestScore = dDragScore(bestAngle, target, lockedSideLength);
+
+      for (let i = 0; i <= coarseCount; i++) {
+        const angle = interval.min + step * i;
+        const score = dDragScore(angle, target, lockedSideLength);
+        if (score < bestScore) {
+          bestScore = score;
+          bestAngle = angle;
+        }
+      }
+
+      let left = Math.max(interval.min, bestAngle - step);
+      let right = Math.min(interval.max, bestAngle + step);
+      for (let i = 0; i < 28; i++) {
+        const m1 = left + (right - left) / 3;
+        const m2 = right - (right - left) / 3;
+        if (dDragScore(m1, target, lockedSideLength) < dDragScore(m2, target, lockedSideLength)) {
+          right = m2;
+        } else {
+          left = m1;
+        }
+      }
+
+      const refinedAngle = (left + right) / 2;
+      for (const angle of [interval.min, interval.max, refinedAngle]) {
+        const score = dDragScore(angle, target, lockedSideLength);
+        if (score < bestScore) {
+          bestScore = score;
+          bestAngle = angle;
+        }
+      }
+      return bestAngle;
+    }
+
+    function dDragScore(angle, target, lockedSideLength) {
+      const candidate = geometryFromRotationAngle(a, angle, cv, planObserver, third, lockedSideLength);
+      return candidate ? distance(candidate.cube.D, target) : Infinity;
+    }
+
+    function trueSizeForProjectedSideLength(anchorPoint, vplPoint, vprPoint, thirdGeometry, projectedSideLength) {
+      const groundZ = frontGroundZForThreePoint(vplPoint, vprPoint, thirdGeometry, anchorPoint);
+      const anchorZ = Math.max(1, Math.abs(anchorPoint.y - thirdGeometry.o.y));
+      return clamp(projectedSideLength, 8, 320) * groundZ / anchorZ;
+    }
+
+    function validRotationInterval(anchor, seedAngle, cvPoint, observerPoint, thirdGeometry = third, forcedProjectedSideLength = null) {
+      const minAngle = 1;
+      const maxAngle = 89;
+      const scanStep = 0.5;
+      let seed = clamp(seedAngle, minAngle, maxAngle);
+      if (!isValidRotationAngle(anchor, seed, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) {
+        seed = nearestValidRotationAngle(anchor, seed, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength);
+      }
+      if (!isValidRotationAngle(anchor, seed, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) return null;
+
+      let min = seed;
+      while (min - scanStep >= minAngle && isValidRotationAngle(anchor, min - scanStep, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) {
+        min -= scanStep;
+      }
+      if (min - scanStep >= minAngle) {
+        min = refineValidBoundary(anchor, min, min - scanStep, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength);
+      } else if (isValidRotationAngle(anchor, minAngle, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) {
+        min = minAngle;
+      }
+
+      let max = seed;
+      while (max + scanStep < maxAngle && isValidRotationAngle(anchor, max + scanStep, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) {
+        max += scanStep;
+      }
+      if (max + scanStep < maxAngle) {
+        max = refineValidBoundary(anchor, max, max + scanStep, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength);
+      } else if (isValidRotationAngle(anchor, maxAngle, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) {
+        max = maxAngle;
+      }
+
+      return { min, max };
+    }
+
+    function refineValidBoundary(anchor, validAngle, invalidAngle, cvPoint, observerPoint, thirdGeometry = third, forcedProjectedSideLength = null) {
+      let valid = validAngle;
+      let invalid = invalidAngle;
+      for (let i = 0; i < 24; i++) {
+        const mid = (valid + invalid) / 2;
+        if (isValidRotationAngle(anchor, mid, cvPoint, observerPoint, thirdGeometry, forcedProjectedSideLength)) {
+          valid = mid;
+        } else {
+          invalid = mid;
+        }
+      }
+      return valid;
+    }
+
+    function isFinitePoint(p) {
+      return Number.isFinite(p.x) && Number.isFinite(p.y);
+    }
+
+    function drawDisplayStage(parent, geom) {
+      const stage = FRONT2D_STATE.displayStage;
+
+      line(parent, geom.cv, geom.observer, SVG_COLORS.green, 1.2);
+      point(parent, geom.cv, SVG_COLORS.green, 5, 'CV');
+      point(parent, geom.observer, SVG_COLORS.green, 5, 'P1');
+      dragHandle(parent, geom.cv, 13, onCvDrag, 'CV');
+      dragHandle(parent, geom.observer, 13, onPDrag, 'P1');
+      if (FRONT2D_STATE.showLabels) {
+        label(parent, 'CV', geom.cv, SVG_COLORS.green);
+        label(parent, 'P1', geom.observer, SVG_COLORS.green);
+      }
+
+      if (stage >= 2) {
+        line(parent, geom.vpl, geom.vpr, SVG_COLORS.black, 1.1);
+        if (geom.third) {
+          line(parent, pt(-5000, geom.third.o.y), pt(5000, geom.third.o.y), SVG_COLORS.horizon, 0.7);
+          circle(parent, geom.third.circle.center, geom.third.circle.radius, 'none', SVG_COLORS.horizon, 0.8);
+          line(parent, geom.third.o, geom.third.vp3, SVG_COLORS.green, 0.9);
+          line(parent, geom.cv, geom.third.pTheta, SVG_COLORS.green, 1);
+          line(parent, geom.third.pTheta, geom.third.o, SVG_COLORS.orange, 1);
+          line(parent, geom.third.pTheta, geom.third.vp3, SVG_COLORS.purple, 1);
+          if (geom.ground) {
+            circle(parent, geom.ground.circle.center, geom.ground.circle.radius, 'none', SVG_COLORS.horizon, 0.8);
+          }
+        }
+        line(parent, geom.planObserver || geom.observer, geom.vpl, SVG_COLORS.blue, 1);
+        line(parent, geom.planObserver || geom.observer, geom.vpr, SVG_COLORS.yellow, 1);
+        line(parent, geom.vpl, pt(geom.vpl.x, 65), SVG_COLORS.blue, 1.6);
+        line(parent, geom.vpr, pt(geom.vpr.x, 65), SVG_COLORS.yellow, 1.6);
+        point(parent, geom.vpl, SVG_COLORS.blue, 5, 'VP1');
+        point(parent, geom.vpr, SVG_COLORS.yellow, 5, 'VP2');
+        dragHandle(parent, geom.vpl, 13, onVplDrag, 'VP1');
+        dragHandle(parent, geom.vpr, 13, onVprDrag, 'VP2');
+        if (geom.third) {
+          point(parent, geom.third.o, SVG_COLORS.green, 4, 'O');
+          point(parent, geom.third.vp3, SVG_COLORS.pink, 5, 'VP3');
+        }
+        if (geom.ground) {
+          point(parent, geom.ground.p2, SVG_COLORS.green, 5, 'P2');
+          dragHandle(parent, geom.ground.p2, 13, onP2Drag, 'P2');
+        }
+        point(parent, geom.q1, SVG_COLORS.half, 3, 'P(Q1)');
+        point(parent, geom.q2, SVG_COLORS.half, 3, 'P(Q2)');
+        if (FRONT2D_STATE.showLabels) {
+          label(parent, 'VP1', geom.vpl, SVG_COLORS.blue);
+          label(parent, 'VP2', geom.vpr, SVG_COLORS.yellow);
+          if (geom.third) {
+            label(parent, 'O', geom.third.o, SVG_COLORS.green);
+            label(parent, 'VP3', geom.third.vp3, SVG_COLORS.pink);
+            drawAngleLabel(parent, 'θ', geom.third.pTheta, geom.cv, geom.third.o, SVG_COLORS.green, 18);
+          }
+          if (geom.ground) {
+            label(parent, 'P2', geom.ground.p2, SVG_COLORS.green);
+          }
+          label(parent, 'P(Q1)', geom.q1, SVG_COLORS.half);
+          label(parent, 'P(Q2)', geom.q2, SVG_COLORS.half);
+          drawAngleLabel(parent, 'α', geom.planObserver || geom.observer, geom.third ? geom.third.o : geom.cv, geom.vpl, SVG_COLORS.blue, 24);
+          drawAngleLabel(parent, 'β', geom.planObserver || geom.observer, geom.third ? geom.third.o : geom.cv, geom.vpr, SVG_COLORS.yellow, 34);
+        }
+      }
+
+      if (stage >= 3) {
+        line(parent, geom.a, geom.A, SVG_COLORS.black, 3);
+        point(parent, geom.a, SVG_COLORS.black, 5, 'a');
+        point(parent, geom.A, SVG_COLORS.black, 5, 'A');
+        dragHandle(parent, geom.a, 13, onADrag, 'a');
+        dragHandle(parent, geom.A, 13, onUpperADrag, 'A');
+        if (FRONT2D_STATE.showLabels) {
+          label(parent, 'a', geom.a, SVG_COLORS.black);
+          label(parent, 'A', geom.A, SVG_COLORS.black);
+        }
+      }
+    }
+
+    function roofGeometry(cubePoints, q1Point, vplPoint, q2Point, vprPoint) {
+      const deltaRad = clamp(FRONT2D_STATE.roofDeltaDeg, 1, 80) * Math.PI / 180;
+      const q1ToVplGap = Math.max(1, Math.abs(q1Point.x - vplPoint.x));
+      const s1Point = pt(vplPoint.x, q1Point.y - Math.tan(deltaRad) * q1ToVplGap);
+      const q2ToVprGap = Math.max(1, Math.abs(vprPoint.x - q2Point.x));
+      const s2Point = pt(vprPoint.x, q2Point.y - Math.tan(deltaRad) * q2ToVprGap);
+      const EPoint = intersect(cubePoints.A, s1Point, cubePoints.B, cubePoints.b);
+      const FPoint = intersect(cubePoints.C, s1Point, cubePoints.D, cubePoints.d);
+      if (!isFinitePoint(s1Point) || !isFinitePoint(s2Point) || !isFinitePoint(EPoint) || !isFinitePoint(FPoint)) return null;
+      return {
+        s1: s1Point,
+        s2: s2Point,
+        E: EPoint,
+        F: FPoint
+      };
+    }
+
+    function drawAngleLabel(parent, value, vertex, rayA, rayB, color, arcRadius) {
+      const angleArc = path(parent, arcPath(vertex, rayA, rayB, arcRadius), 'none', color, 1);
+      angleArc.style.pointerEvents = 'none';
+      const labelPoint = fovLabelPoint(vertex, rayA, rayB, arcRadius);
+      const angleText = text(parent, value, labelPoint.x, labelPoint.y, color, 12);
+      angleText.style.pointerEvents = 'none';
+    }
+
+    function drawPConeOverlay(parent, geom) {
+      if (!FRONT2D_STATE.showPCone) return;
+
+      const centerAngle = polarAngle(geom.observer, geom.cv);
+      const halfAngle = FRONT2D_STATE.fovDeg * Math.PI / 360;
+      const length = 1400;
+      const p1 = pt(
+        geom.observer.x + Math.cos(centerAngle - halfAngle) * length,
+        geom.observer.y + Math.sin(centerAngle - halfAngle) * length
+      );
+      const p2 = pt(
+        geom.observer.x + Math.cos(centerAngle + halfAngle) * length,
+        geom.observer.y + Math.sin(centerAngle + halfAngle) * length
+      );
+      const fill = poly(parent, [geom.observer, p1, p2], 'rgba(75, 143, 107, 0.10)', SVG_COLORS.green, 0.9);
+      fill.style.pointerEvents = 'none';
+      const l1 = line(parent, geom.observer, p1, SVG_COLORS.green, 1);
+      const l2 = line(parent, geom.observer, p2, SVG_COLORS.green, 1);
+      l1.style.pointerEvents = 'none';
+      l2.style.pointerEvents = 'none';
+      const arcRadius = Math.min(58, distance(geom.observer, geom.cv) * 0.42);
+      const arc = path(parent, arcPath(geom.observer, p1, p2, arcRadius), 'none', SVG_COLORS.green, 1);
+      arc.style.pointerEvents = 'none';
+      if (FRONT2D_STATE.showLabels) {
+        const p = fovLabelPoint(geom.observer, p1, p2, arcRadius);
+        const t = text(parent, `${Math.round(FRONT2D_STATE.fovDeg)}°`, p.x, p.y, SVG_COLORS.green, 12);
+        t.style.pointerEvents = 'none';
+      }
+    }
+
+    function drawCvRangeMask(parent, geom) {
+      if (!FRONT2D_STATE.showCvRange) return;
+
+      const rangeRadius = cvRangeRadius(geom.cv, geom.observer);
+      const maskId = 'cv-visible-range-mask';
+      const defs = document.createElementNS(NS, 'defs');
+      const mask = document.createElementNS(NS, 'mask');
+      mask.setAttribute('id', maskId);
+      mask.setAttribute('maskUnits', 'userSpaceOnUse');
+      mask.setAttribute('x', -5000);
+      mask.setAttribute('y', -5000);
+      mask.setAttribute('width', 10000);
+      mask.setAttribute('height', 10000);
+
+      const dimArea = rect(parent, -5000, -5000, 10000, 10000, '#fff', 'none', 0);
+      const visibleArea = circle(parent, geom.cv, rangeRadius, '#000', 'none', 0);
+      mask.appendChild(dimArea);
+      mask.appendChild(visibleArea);
+      defs.appendChild(mask);
+      parent.appendChild(defs);
+
+      const overlay = rect(parent, -5000, -5000, 10000, 10000, 'rgba(0, 0, 0, 0.70)', 'none', 0);
+      overlay.setAttribute('mask', `url(#${maskId})`);
+      overlay.style.pointerEvents = 'none';
+      const outline = circle(parent, geom.cv, rangeRadius, 'none', SVG_COLORS.green, 0.9);
+      outline.style.pointerEvents = 'none';
+    }
+
+    function cvRangeRadius(cv, observer) {
+      const halfAngle = Math.min(89.9, FRONT2D_STATE.fovDeg / 2) * Math.PI / 180;
+      return Math.min(4000, distance(cv, observer) * Math.tan(halfAngle));
+    }
+
+    function drawExampleBackground(parent, geom) {
+      if (!FRONT2D_STATE.showExamples) return;
+
+      const horizonY = Number.isFinite(geom.horizonY) ? geom.horizonY : geom.cv.y;
+      const sky = rect(parent, -5000, -5000, 10000, horizonY + 5000, '#dff1ff', 'none', 0);
+      const ground = rect(parent, -5000, horizonY, 10000, 5000, '#ead6bd', 'none', 0);
+      sky.style.pointerEvents = 'none';
+      ground.style.pointerEvents = 'none';
+    }
+
+    function drawRealExamples(parent, geom) {
+      if (!FRONT2D_STATE.showExamples) return;
+
+      const frame = frontPictureFrameBounds(geom.vpl, geom.vpr, geom.cv);
+      const pictureBottom = frame.bottom;
+      const eyeLevel = geom.cv;
+      const standingHeight = Math.max(48, pictureBottom - eyeLevel.y);
+      drawBackPerson(parent, eyeLevel, pictureBottom, standingHeight, geom.vpl, geom.vpr);
+    }
+
+    function drawBackPerson(parent, eye, footY, height, vplPoint, vprPoint) {
+      const group = document.createElementNS(NS, 'g');
+      group.style.pointerEvents = 'none';
+      parent.appendChild(group);
+
+      const headR = height / 13;
+      const torsoHalf = height * 0.105;
+      const torsoRy = Math.max(5, height * 0.17);
+      const pelvisRx = height * 0.082;
+      const pelvisRy = Math.max(2.4, height * 0.045);
+      const legAnchorHalf = pelvisRx * 0.52;
+      const footHalf = height * 0.055;
+      const handR = height * 0.030;
+      const footR = height * 0.034;
+      const armLength = height * 0.43;
+      const x = eye.x;
+
+      const headCenter = pt(x, eye.y + headR * 0.18);
+      const headBottom = headCenter.y + headR;
+      const torsoTop = headBottom + 0.5;
+      const torsoCenter = pt(x, torsoTop + torsoRy);
+      const torsoBottom = torsoCenter.y + torsoRy;
+      const pelvisCenter = pt(x, torsoBottom + pelvisRy * 0.65);
+      const bodyCenter = pt(x, (torsoTop + pelvisCenter.y) / 2);
+      const neckTop = pt(x, headBottom - headR * 0.10);
+      const neckBottom = pt(x, torsoTop + height * 0.025);
+      const leftHip = pt(x - legAnchorHalf, pelvisCenter.y + pelvisRy * 0.20);
+      const rightHip = pt(x + legAnchorHalf, pelvisCenter.y + pelvisRy * 0.20);
+      const footCenterY = footY - footR * 0.8;
+      const leftFoot = pt(x - footHalf, footCenterY);
+      const rightFoot = pt(x + footHalf, footCenterY);
+      const leftHand = pointToward(bodyCenter, vplPoint, armLength, pt(-1, 0));
+      const rightHand = pointToward(bodyCenter, vprPoint, armLength, pt(1, 0));
+
+      exampleLine(group, neckTop, neckBottom);
+      exampleLine(group, bodyCenter, leftHand);
+      exampleLine(group, bodyCenter, rightHand);
+      exampleLine(group, leftHip, leftFoot);
+      exampleLine(group, rightHip, rightFoot);
+      exampleEllipse(group, torsoCenter, torsoHalf, torsoRy, 0);
+      exampleLine(group, pt(x, torsoTop + torsoRy * 0.2), pt(x, torsoBottom - torsoRy * 0.2));
+      exampleEllipse(group, pelvisCenter, pelvisRx, pelvisRy, 0);
+      exampleHead(group, headCenter, headR * 0.82, headR * 1.12, 0);
+      exampleCircle(group, leftHand, handR);
+      exampleCircle(group, rightHand, handR);
+      exampleEllipse(group, leftFoot, footR * 1.5, footR * 0.8, 0);
+      exampleEllipse(group, rightFoot, footR * 1.5, footR * 0.8, 0);
+      exampleEye(group, eye, Math.max(1.2, height * 0.018));
+    }
+
+    function drawFrontPerson(parent, eye, footY, height, vplPoint, vprPoint) {
+      const group = document.createElementNS(NS, 'g');
+      group.style.pointerEvents = 'none';
+      parent.appendChild(group);
+
+      const headR = height / 13;
+      const torsoHalf = height * 0.105;
+      const torsoRy = Math.max(5, height * 0.17);
+      const pelvisRx = height * 0.082;
+      const pelvisRy = Math.max(2.4, height * 0.045);
+      const legAnchorHalf = pelvisRx * 0.52;
+      const footHalf = height * 0.055;
+      const handR = height * 0.030;
+      const footR = height * 0.034;
+      const armLength = height * 0.43;
+      const x = eye.x;
+
+      const headCenter = pt(x, eye.y + headR * 0.18);
+      const headBottom = headCenter.y + headR;
+      const torsoTop = headBottom + 0.5;
+      const torsoCenter = pt(x, torsoTop + torsoRy);
+      const torsoBottom = torsoCenter.y + torsoRy;
+      const pelvisCenter = pt(x, torsoBottom + pelvisRy * 0.65);
+      const bodyCenter = pt(x, (torsoTop + pelvisCenter.y) / 2);
+      const neckTop = pt(x, headBottom - headR * 0.10);
+      const neckBottom = pt(x, torsoTop + height * 0.025);
+      const armJoint = bodyCenter;
+      const leftHip = pt(x - legAnchorHalf, pelvisCenter.y + pelvisRy * 0.20);
+      const rightHip = pt(x + legAnchorHalf, pelvisCenter.y + pelvisRy * 0.20);
+      const footCenterY = footY - footR * 0.8;
+      const leftFoot = pt(x - footHalf, footCenterY);
+      const rightFoot = pt(x + footHalf, footCenterY);
+      const leftHand = pointToward(armJoint, vplPoint, armLength, pt(-1, 0));
+      const rightHand = pointToward(armJoint, vprPoint, armLength, pt(1, 0));
+
+      exampleLine(group, neckTop, neckBottom);
+      exampleLine(group, armJoint, leftHand);
+      exampleLine(group, armJoint, rightHand);
+      exampleLine(group, leftHip, leftFoot);
+      exampleLine(group, rightHip, rightFoot);
+      exampleEllipse(group, torsoCenter, torsoHalf, torsoRy, 0);
+      exampleEllipse(group, pelvisCenter, pelvisRx, pelvisRy, 0);
+      exampleHead(group, headCenter, headR * 0.82, headR * 1.12, 0);
+      exampleNose(group, pt(x, eye.y + headR * 0.18), Math.max(1.4, headR * 0.22), pt(0, 1));
+      exampleCircle(group, leftHand, handR);
+      exampleCircle(group, rightHand, handR);
+      exampleEllipse(group, leftFoot, footR * 1.5, footR * 0.8, 0);
+      exampleEllipse(group, rightFoot, footR * 1.5, footR * 0.8, 0);
+      exampleEye(group, eye, Math.max(1.2, height * 0.018));
+    }
+
+    function drawCvHandsOnly(parent, eye, height, vplPoint, vprPoint) {
+      const frame = frontPictureFrameBounds(vplPoint, vprPoint);
+      const headR = height / 13;
+      const torsoHalf = height * 0.105;
+      const torsoRy = Math.max(5, height * 0.17);
+      const pelvisRx = height * 0.082;
+      const pelvisRy = Math.max(2.4, height * 0.045);
+      const handR = height * 0.030;
+      const armLength = height * 0.43;
+      const x = eye.x;
+
+      const behind = document.createElementNS(NS, 'g');
+      behind.style.pointerEvents = 'none';
+      behind.setAttribute('opacity', '0.22');
+      parent.appendChild(behind);
+
+      const hiddenHeadCenter = pt(x, frame.bottom + headR * 1.35);
+      const hiddenTorsoTop = hiddenHeadCenter.y + headR * 1.12 + 0.5;
+      const hiddenTorsoCenter = pt(x, hiddenTorsoTop + torsoRy);
+      const hiddenTorsoBottom = hiddenTorsoCenter.y + torsoRy;
+      const hiddenPelvisCenter = pt(x, hiddenTorsoBottom + pelvisRy * 0.65);
+      const hiddenNeckTop = pt(x, hiddenHeadCenter.y + headR * 0.92);
+      const hiddenNeckBottom = pt(x, hiddenTorsoTop + height * 0.025);
+      const hiddenArmJoint = pt(x, frame.bottom + height * 0.10);
+
+      exampleLine(behind, hiddenNeckTop, hiddenNeckBottom);
+      exampleEllipse(behind, hiddenTorsoCenter, torsoHalf, torsoRy, 0);
+      exampleEllipse(behind, hiddenPelvisCenter, pelvisRx, pelvisRy, 0);
+      exampleHead(behind, hiddenHeadCenter, headR * 0.82, headR * 1.12, 0);
+      exampleNose(behind, pt(x, hiddenHeadCenter.y), Math.max(1.4, headR * 0.22), pt(0, -1));
+
+      const headCenter = pt(x, eye.y + headR * 0.18);
+      const headBottom = headCenter.y + headR;
+      const torsoTop = headBottom + 0.5;
+      const torsoCenter = pt(x, torsoTop + torsoRy);
+      const torsoBottom = torsoCenter.y + torsoRy;
+      const pelvisCenter = pt(x, torsoBottom + pelvisRy * 0.65);
+      const projectedArmJoint = pt(x, (torsoTop + pelvisCenter.y) / 2);
+      const leftHand = pointToward(projectedArmJoint, vplPoint, armLength, pt(-1, 0));
+      const rightHand = pointToward(projectedArmJoint, vprPoint, armLength, pt(1, 0));
+
+      const clipId = 'cv-hands-picture-frame-clip';
+      const defs = document.createElementNS(NS, 'defs');
+      const clip = document.createElementNS(NS, 'clipPath');
+      const clipRect = document.createElementNS(NS, 'rect');
+      clip.setAttribute('id', clipId);
+      clipRect.setAttribute('x', frame.left);
+      clipRect.setAttribute('y', frame.top);
+      clipRect.setAttribute('width', frame.width);
+      clipRect.setAttribute('height', frame.height);
+      clip.appendChild(clipRect);
+      defs.appendChild(clip);
+      parent.appendChild(defs);
+
+      const hands = document.createElementNS(NS, 'g');
+      hands.style.pointerEvents = 'none';
+      hands.setAttribute('clip-path', `url(#${clipId})`);
+      parent.appendChild(hands);
+
+      exampleLine(hands, hiddenArmJoint, leftHand);
+      exampleLine(hands, hiddenArmJoint, rightHand);
+      exampleCircle(hands, leftHand, handR);
+      exampleCircle(hands, rightHand, handR);
+    }
+
+    function drawSidePerson(parent, eye, height, lookAtPoint, secondLookAtPoint, opacity = 0.5) {
+      const group = document.createElementNS(NS, 'g');
+      group.style.pointerEvents = 'none';
+      group.setAttribute('opacity', opacity);
+      parent.appendChild(group);
+
+      const dir = unitVector(eye, lookAtPoint, pt(1, 0));
+      const headR = height / 13;
+      const torsoRx = height * 0.070;
+      const torsoRy = Math.max(5, height * 0.17);
+      const pelvisRx = height * 0.060;
+      const pelvisRy = Math.max(2.4, height * 0.045);
+      const handR = height * 0.030;
+      const footR = height * 0.034;
+      const armLength = height * 0.34;
+      const footY = eye.y + height;
+      const footCenterY = footY - footR * 0.8;
+      const x = eye.x;
+
+      const headCenter = pt(x - dir.x * headR * 0.18, eye.y + headR * 0.18);
+      const headBottom = headCenter.y + headR * 1.12;
+      const torsoTop = headBottom + 0.5;
+      const torsoCenter = pt(x, torsoTop + torsoRy);
+      const torsoBottom = torsoCenter.y + torsoRy;
+      const pelvisCenter = pt(x, torsoBottom + pelvisRy * 0.65);
+      const neckTop = pt(x, headBottom - headR * 0.12);
+      const neckBottom = pt(x, torsoTop + height * 0.025);
+      const bodyCenter = pt(x, (torsoTop + pelvisCenter.y) / 2);
+      const hand = pointToward(bodyCenter, lookAtPoint, armLength, dir);
+      const secondHand = pointToward(bodyCenter, secondLookAtPoint, armLength, dir);
+      const hip = pt(x, pelvisCenter.y + pelvisRy * 0.20);
+      const foot = pt(x + dir.x * height * 0.035, footCenterY);
+
+      exampleLine(group, neckTop, neckBottom);
+      exampleLine(group, bodyCenter, hand);
+      exampleLine(group, bodyCenter, secondHand);
+      exampleHandArc(group, hand, secondHand, bodyCenter, height);
+      exampleLine(group, hip, foot);
+      exampleEllipse(group, torsoCenter, torsoRx, torsoRy, 0);
+      exampleEllipse(group, pelvisCenter, pelvisRx, pelvisRy, 0);
+      exampleHead(group, headCenter, headR * 0.78, headR * 1.10, 0);
+      exampleNose(group, pt(eye.x, eye.y + headR * 0.16), Math.max(1.4, headR * 0.26), dir);
+      exampleCircle(group, hand, handR);
+      exampleCircle(group, secondHand, handR);
+      exampleEllipse(group, foot, footR * 1.7, footR * 0.8, 0);
+      exampleEye(group, eye, Math.max(1.2, height * 0.018));
+    }
+
+    function drawTopPerson(parent, eye, height, vplPoint, vprPoint, cvPoint) {
+      const group = document.createElementNS(NS, 'g');
+      group.style.pointerEvents = 'none';
+      parent.appendChild(group);
+
+      const headR = height / 13;
+      const handR = height * 0.030;
+      const topLen = height * 0.30;
+      const topWidth = height * 0.18;
+      const handLength = height * 0.43;
+      const bodyAngle = Math.atan2(vprPoint.y - vplPoint.y, vprPoint.x - vplPoint.x) * 180 / Math.PI;
+      const leftHand = pointToward(eye, vplPoint, handLength, pt(-1, 0));
+      const rightHand = pointToward(eye, vprPoint, handLength, pt(1, 0));
+      const noseDir = unitVector(eye, cvPoint, pt(0, -1));
+
+      exampleLine(group, eye, leftHand);
+      exampleLine(group, eye, rightHand);
+      exampleEllipse(group, eye, topLen / 2, topWidth / 2, bodyAngle);
+      exampleHead(group, eye, headR * 0.82, headR * 1.12, bodyAngle);
+      exampleNose(group, eye, Math.max(1.4, headR * 0.24), noseDir);
+      exampleCircle(group, leftHand, handR);
+      exampleCircle(group, rightHand, handR);
+      exampleEye(group, eye, Math.max(1.2, height * 0.018));
+    }
+
+    function pointToward(from, to, length, fallback) {
+      const dir = unitVector(from, to, fallback);
+      return pt(from.x + dir.x * length, from.y + dir.y * length);
+    }
+
+    function unitVector(from, to, fallback) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const n = Math.hypot(dx, dy);
+      if (n < 1e-9) return fallback;
+      return pt(dx / n, dy / n);
+    }
+
+    function exampleLine(parent, p, q) {
+      const el = line(parent, p, q, '#333', 1.25);
+      el.setAttribute('stroke-linejoin', 'round');
+      return el;
+    }
+
+    function exampleCircle(parent, center, radius) {
+      return circle(parent, center, radius, '#ffd4df', '#333', 1.25);
+    }
+
+    function exampleHead(parent, center, rx, ry, rotate) {
+      return exampleEllipse(parent, center, rx, ry, rotate);
+    }
+
+    function exampleNose(parent, center, size, direction) {
+      const dir = unitVector(pt(0, 0), direction, pt(1, 0));
+      const normal = pt(-dir.y, dir.x);
+      const base1 = pt(center.x + normal.x * size * 0.45, center.y + normal.y * size * 0.45);
+      const base2 = pt(center.x - normal.x * size * 0.45, center.y - normal.y * size * 0.45);
+      const tip = pt(center.x + dir.x * size * 1.35, center.y + dir.y * size * 1.35);
+      return poly(parent, [base1, tip, base2], '#ffd4df', '#333', 1);
+    }
+
+    function exampleHandArc(parent, p, q, bodyCenter, height) {
+      const mid = pt((p.x + q.x) / 2, (p.y + q.y) / 2);
+      const away = unitVector(bodyCenter, mid, pt(0, -1));
+      const control = pt(mid.x + away.x * height * 0.18, mid.y + away.y * height * 0.18);
+      const arc = path(parent, `M ${p.x} ${p.y} Q ${control.x} ${control.y} ${q.x} ${q.y}`, 'none', '#333', 0.9);
+      arc.style.pointerEvents = 'none';
+      const delta = text(parent, 'δ', control.x, control.y - height * 0.04, '#333', 9);
+      delta.style.pointerEvents = 'none';
+      return arc;
+    }
+
+    function exampleEye(parent, center, radius) {
+      return circle(parent, center, radius, '#111', 'none', 0);
+    }
+
+    function exampleEllipse(parent, center, rx, ry, rotate) {
+      const el = document.createElementNS(NS, 'ellipse');
+      el.setAttribute('cx', center.x);
+      el.setAttribute('cy', center.y);
+      el.setAttribute('rx', rx);
+      el.setAttribute('ry', ry);
+      el.setAttribute('fill', '#ffd4df');
+      el.setAttribute('stroke', '#333');
+      el.setAttribute('stroke-width', 1.25);
+      el.setAttribute('stroke-linejoin', 'round');
+      el.setAttribute('transform', `rotate(${rotate} ${center.x} ${center.y})`);
+      parent.appendChild(el);
+      return el;
+    }
+
+    function intersect(p1, p2, p3, p4) {
+      const den = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+      const a1 = p1.x * p2.y - p1.y * p2.x;
+      const a2 = p3.x * p4.y - p3.y * p4.x;
+      return pt(
+        (a1 * (p3.x - p4.x) - (p1.x - p2.x) * a2) / den,
+        (a1 * (p3.y - p4.y) - (p1.y - p2.y) * a2) / den
+      );
+    }
+
+    function verticalLineWithLine(x, p, q) {
+      const t = (x - p.x) / (q.x - p.x);
+      return pt(x, p.y + (q.y - p.y) * t);
+    }
+
+    function visibleCubeEdgeKeys(points) {
+      // Convex cuboid hidden-line rule: projected faces with the visible winding
+      // expose their boundary edges; edges belonging only to back faces are gray.
+      const visible = new Set();
+      for (const face of CUBE_FACES) {
+        const polygon = face.map(name => points[name]);
+        if (polygonSignedArea(polygon) <= 1e-6) continue;
+        for (let i = 0; i < face.length; i++) {
+          visible.add(edgeKey(face[i], face[(i + 1) % face.length]));
+        }
+      }
+      return visible;
+    }
+
+    function polygonSignedArea(polygon) {
+      let area = 0;
+      for (let i = 0; i < polygon.length; i++) {
+        const p = polygon[i];
+        const q = polygon[(i + 1) % polygon.length];
+        area += p.x * q.y - q.x * p.y;
+      }
+      return area / 2;
+    }
+
+    function edgeKey(aName, bName) {
+      return [aName, bName].sort().join('-');
+    }
+
+    function angleDeg(aPoint, oPoint, bPoint) {
+      const v1 = pt(aPoint.x - oPoint.x, aPoint.y - oPoint.y);
+      const v2 = pt(bPoint.x - oPoint.x, bPoint.y - oPoint.y);
+      const dot = v1.x * v2.x + v1.y * v2.y;
+      const n1 = Math.hypot(v1.x, v1.y);
+      const n2 = Math.hypot(v2.x, v2.y);
+      return Math.acos(clamp(dot / (n1 * n2), -1, 1)) * 180 / Math.PI;
+    }
+
+    function polarAngle(oPoint, p) {
+      return Math.atan2(p.y - oPoint.y, p.x - oPoint.x);
+    }
+
+    function arcPath(oPoint, p1, p2, radius) {
+      let a1 = polarAngle(oPoint, p1);
+      let a2 = polarAngle(oPoint, p2);
+      while (a2 < a1) a2 += Math.PI * 2;
+      if (a2 - a1 > Math.PI) [a1, a2] = [a2, a1 + Math.PI * 2];
+      const start = pt(oPoint.x + Math.cos(a1) * radius, oPoint.y + Math.sin(a1) * radius);
+      const end = pt(oPoint.x + Math.cos(a2) * radius, oPoint.y + Math.sin(a2) * radius);
+      return `M ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y}`;
+    }
+
+    function fovLabelPoint(oPoint, p1, p2, radius) {
+      let a1 = polarAngle(oPoint, p1);
+      let a2 = polarAngle(oPoint, p2);
+      while (a2 < a1) a2 += Math.PI * 2;
+      if (a2 - a1 > Math.PI) [a1, a2] = [a2, a1 + Math.PI * 2];
+      const mid = (a1 + a2) / 2;
+      return pt(oPoint.x + Math.cos(mid) * (radius + 7), oPoint.y + Math.sin(mid) * (radius + 7));
+    }
+
+    function clear(node) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function line(parent, p, q, color, width) {
+      const el = document.createElementNS(NS, 'line');
+      el.setAttribute('x1', p.x);
+      el.setAttribute('y1', p.y);
+      el.setAttribute('x2', q.x);
+      el.setAttribute('y2', q.y);
+      el.setAttribute('stroke', color);
+      el.setAttribute('stroke-width', width);
+      el.setAttribute('stroke-linecap', 'round');
+      parent.appendChild(el);
+      return el;
+    }
+
+    function poly(parent, points, fill, stroke, width) {
+      const el = document.createElementNS(NS, 'polygon');
+      el.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
+      el.setAttribute('fill', fill);
+      el.setAttribute('stroke', stroke);
+      el.setAttribute('stroke-width', width);
+      parent.appendChild(el);
+      return el;
+    }
+
+    function point(parent, p, color, radius, symbol) {
+      const el = document.createElementNS(NS, 'circle');
+      el.setAttribute('cx', p.x);
+      el.setAttribute('cy', p.y);
+      el.setAttribute('r', radius);
+      el.setAttribute('fill', color);
+      if (symbol) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (event) => {
+          event.stopPropagation();
+          showSymbolInfo(symbol);
+        });
+      }
+      parent.appendChild(el);
+      return el;
+    }
+
+    function dragHandle(parent, p, radius, onDrag, symbol) {
+      const el = document.createElementNS(NS, 'circle');
+      el.setAttribute('cx', p.x);
+      el.setAttribute('cy', p.y);
+      el.setAttribute('r', radius);
+      el.setAttribute('fill', 'transparent');
+      el.style.cursor = 'grab';
+      el.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        if (symbol) showSymbolInfo(symbol);
+        el.style.cursor = 'grabbing';
+        const move = (moveEvent) => onDrag(moveEvent);
+        const up = () => {
+          el.style.cursor = 'grab';
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+      parent.appendChild(el);
+      return el;
+    }
+
+    function circle(parent, center, radius, fill, stroke, width) {
+      const el = document.createElementNS(NS, 'circle');
+      el.setAttribute('cx', center.x);
+      el.setAttribute('cy', center.y);
+      el.setAttribute('r', radius);
+      el.setAttribute('fill', fill);
+      el.setAttribute('stroke', stroke);
+      el.setAttribute('stroke-width', width);
+      parent.appendChild(el);
+      return el;
+    }
+
+    function rect(parent, x, y, width, height, fill, stroke, strokeWidth) {
+      const el = document.createElementNS(NS, 'rect');
+      el.setAttribute('x', x);
+      el.setAttribute('y', y);
+      el.setAttribute('width', width);
+      el.setAttribute('height', height);
+      el.setAttribute('fill', fill);
+      el.setAttribute('stroke', stroke);
+      el.setAttribute('stroke-width', strokeWidth);
+      parent.appendChild(el);
+      return el;
+    }
+
+    function path(parent, d, fill, stroke, width) {
+      const el = document.createElementNS(NS, 'path');
+      el.setAttribute('d', d);
+      el.setAttribute('fill', fill);
+      el.setAttribute('stroke', stroke);
+      el.setAttribute('stroke-width', width);
+      el.setAttribute('stroke-linecap', 'round');
+      parent.appendChild(el);
+      return el;
+    }
+
+    function normalizeSymbol(symbol) {
+      return sharedSymbolKey(symbol);
+    }
+
+    function showSymbolInfo(symbol) {
+      const box = document.getElementById('symbolInfo');
+      if (!box || !SYMBOL_INFO[normalizeSymbol(symbol)]) return;
+      box.innerHTML = symbolInfoHtml(symbol);
+    }
+
+    function text(parent, value, x, y, color, size, symbol) {
+      const el = document.createElementNS(NS, 'text');
+      el.textContent = value;
+      el.setAttribute('x', x);
+      el.setAttribute('y', y);
+      el.setAttribute('fill', color);
+      el.setAttribute('font-size', size);
+      el.setAttribute('font-weight', '600');
+      el.setAttribute('text-anchor', 'middle');
+      if (symbol || SYMBOL_INFO[normalizeSymbol(value)]) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (event) => {
+          event.stopPropagation();
+          showSymbolInfo(symbol || value);
+        });
+      }
+      parent.appendChild(el);
+      return el;
+    }
+
+    function label(parent, value, p, color) {
+      return text(parent, value, p.x, p.y - 7, color, 12, value);
+    }
+  }
+</script>
+</body>
+</html>
